@@ -1,0 +1,213 @@
+{
+  "timestamp": "2026-05-18T18:00:14.323830",
+  "tests": [
+    {
+      "test_name": "Tool Registry",
+      "passed": true,
+      "details": {
+        "total_tools": 19,
+        "category_application": 2,
+        "category_browser": 4,
+        "category_file_system": 4,
+        "category_keyboard": 3,
+        "category_mouse": 4,
+        "category_system": 2,
+        "category_information": 0,
+        "category_media": 0,
+        "category_coding": 0,
+        "category_communication": 0,
+        "tool_retrieval": true,
+        "statistics": {
+          "total_tools": 19,
+          "enabled_tools": 19,
+          "total_executions": 0,
+          "total_successes": 0,
+          "total_errors": 0,
+          "tools_stats": [
+            {
+              "name": "launch_app",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "close_app",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "open_website",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "navigate_url",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "search_google",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "search_youtube",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "create_folder",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "create_file",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "delete_file",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "write_file",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "type_text",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "press_key",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "press_hotkey",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "move_mouse",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "click",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "scroll",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "drag",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "screenshot",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            },
+            {
+              "name": "wait",
+              "executions": 0,
+              "successes": 0,
+              "errors": 0,
+              "success_rate": "0.0%"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "test_name": "Tool Execution",
+      "passed": true,
+      "tool_tests": [
+        {
+          "tool": "wait",
+          "success": true
+        },
+        {
+          "tool": "screenshot",
+          "success": true
+        }
+      ]
+    },
+    {
+      "test_name": "Vision System",
+      "passed": true,
+      "details": {
+        "screenshot_path": "D:\\e drive\\Only_Project\\jarvis1.0\\Backend\\screenshots\\screenshot_20260518_180018.png",
+        "vision_context": {
+          "description": "",
+          "text": "",
+          "visible_elements": 0,
+          "last_action": null,
+          "error_detected": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "test_name": "History Tracking",
+      "passed": true,
+      "details": {
+        "action_count": 0,
+        "decision_count": 0
+      }
+    },
+    {
+      "test_name": "Simple Task",
+      "passed": false,
+      "task": "Take a screenshot",
+      "error": "'success'"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 4,
+    "failed": 1
+  }
+}

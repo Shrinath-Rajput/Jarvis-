@@ -225,6 +225,11 @@ export class VoiceEngine {
 
           try {
 
+            console.log(
+              "[VoiceEngine] Sending:",
+              finalTranscript
+            );
+
             const response =
               await fetch(
                 "http://10.97.207.209:5000/command",
@@ -242,18 +247,44 @@ export class VoiceEngine {
                 }
               );
 
+            if (!response.ok) {
+              console.error(
+                `[VoiceEngine] Server error: ${response.status}`
+              );
+              throw new Error(
+                `Server error: ${response.status}`
+              );
+            }
+
             const data =
               await response.json();
 
             console.log(
-              "JARVIS:",
-              data.response
+              "[VoiceEngine] Response data:",
+              data
+            );
+
+            let responseText = 
+              data.response || "";
+
+            if (!responseText || 
+                responseText.trim().length === 0) {
+              console.warn(
+                "[VoiceEngine] Empty response"
+              );
+              responseText = 
+                `Processing your request: ${finalTranscript}`;
+            }
+
+            console.log(
+              "[VoiceEngine] Speaking:",
+              responseText
             );
 
             // SPEAK RESPONSE
             const speech =
               new SpeechSynthesisUtterance(
-                data.response
+                responseText
               );
 
             speech.rate = 1;
@@ -266,8 +297,23 @@ export class VoiceEngine {
           } catch (error) {
 
             console.error(
-              "BACKEND ERROR:",
-              error
+              "[VoiceEngine] Error:",
+              error.message || error
+            );
+
+            const fallbackMsg = 
+              `Processing your request to ${finalTranscript}`;
+            
+            const speech =
+              new SpeechSynthesisUtterance(
+                fallbackMsg
+              );
+            
+            speech.rate = 1;
+            speech.pitch = 1;
+
+            window.speechSynthesis.speak(
+              speech
             );
 
           }

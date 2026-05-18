@@ -1,12 +1,24 @@
+import time
+
 from planner_ai import create_plan
 
 from tools import (
+
     open_app,
+    open_website,
+
     search_google,
     search_youtube,
+
     create_folder,
+
     write_text,
-    take_screenshot
+
+    take_screenshot,
+
+    click_text,
+    press_key,
+    type_text
 )
 
 
@@ -53,6 +65,16 @@ def run_agent(command):
                 )
 
             # =========================
+            # OPEN WEBSITE
+            # =========================
+
+            elif tool == "open_website":
+
+                result = open_website(
+                    action.get("site")
+                )
+
+            # =========================
             # GOOGLE SEARCH
             # =========================
 
@@ -93,6 +115,41 @@ def run_agent(command):
                 )
 
             # =========================
+            # CLICK TEXT
+            # =========================
+
+            elif tool == "click_text":
+
+                result = click_text(
+                    action.get("text")
+                )
+
+            # =========================
+            # PRESS KEY
+            # =========================
+
+            elif tool == "press_key":
+
+                result = press_key(
+                    action.get("key")
+                )
+
+            # =========================
+            # WAIT
+            # =========================
+
+            elif tool == "wait":
+
+                time.sleep(
+                    action.get("seconds")
+                )
+
+                result = (
+                    f"Waited "
+                    f"{action.get('seconds')} sec"
+                )
+
+            # =========================
             # SCREENSHOT
             # =========================
 
@@ -105,6 +162,11 @@ def run_agent(command):
                 result = (
                     f"Unknown tool: {tool}"
                 )
+
+            print(
+                "RESULT:",
+                result
+            )
 
             results.append(result)
 
