@@ -1,4 +1,7 @@
-# Logs
+# =========================
+# LOGS
+# =========================
+
 logs
 *.log
 npm-debug.log*
@@ -7,23 +10,97 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
 
-# Editor directories and files
+# =========================
+# NODE
+# =========================
+
+node_modules/
+dist/
+dist-ssr/
+build/
+
+
+# =========================
+# PYTHON
+# =========================
+
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python-version
+
+
+# =========================
+# OLLAMA
+# =========================
+
+.ollama/
+
+
+# =========================
+# AI MODELS
+# =========================
+
+*.h5
+*.pt
+*.pth
+*.onnx
+*.gguf
+*.ckpt
+
+
+# =========================
+# CACHE
+# =========================
+
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+
+# =========================
+# ENVIRONMENT
+# =========================
+
+.env
+.env.local
+.env.*
+
+
+# =========================
+# SCREENSHOTS / MEDIA
+# =========================
+
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+
+
+# =========================
+# EDITORS
+# =========================
+
 .vscode/*
 !.vscode/extensions.json
-.idea
+
+.idea/
 .DS_Store
+
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Environment settings
-.env
-.env.local
-.env.*
+
+# =========================
+# SYSTEM FILES
+# =========================
+
+Thumbs.db
+desktop.ini

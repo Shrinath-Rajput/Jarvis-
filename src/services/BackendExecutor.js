@@ -59,7 +59,7 @@ class BackendExecutor {
     console.log(`[BackendExecutor] Executing: ${userCommand}`);
     
     try {
-      // 1. Send task to backend
+      // 1. Send task to the REAL autonomous agent endpoint
       const response = await fetch(`${BACKEND_URL}/api/autonomous/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -210,15 +210,17 @@ class BackendExecutor {
   _parseBackendResult(result) {
     return {
       success: result.success,
-      output: result.result?.summary || result.error || 'Task execution completed',
-      actionsTaken: result.result?.action_history || [],
+      output: result.result || result.error || 'Task execution completed',
+      actionsTaken: result.actions || result.result?.action_history || [],
       decisions: result.result?.decision_history || [],
-      finalScreenshot: result.result?.final_screenshot || null,
+      finalScreenshot: result.final_state || result.result?.final_screenshot || null,
       statistics: result.result?.statistics || {},
       errors: result.result?.errors || [],
-      completedSteps: result.result?.steps_taken || 0,
-      maxSteps: result.result?.max_steps || 150,
-      taskId: result.result?.task_id
+      completedSteps: result.steps_taken || result.result?.steps_taken || 0,
+      maxSteps: 150,
+      taskId: result.task_id,
+      toolsUsed: result.tools_used || [],
+      executionTime: result.execution_time || 0
     };
   }
 

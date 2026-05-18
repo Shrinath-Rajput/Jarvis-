@@ -21,6 +21,7 @@ from planner_ai import get_planner
 from executor import get_executor
 from memory_manager import get_memory_manager
 from browser_control import close_browser
+from autonomous_agent_enhanced import EnhancedAutonomousAgent
 
 # Setup logging
 logging.basicConfig(
@@ -57,7 +58,9 @@ try:
     planner = get_planner()
     executor = get_executor()
     memory = get_memory_manager()
+    autonomous_agent = EnhancedAutonomousAgent(use_local_llm=True)
     logger.info("✅ All components initialized successfully")
+    logger.info("✅ Enhanced Autonomous Agent ready")
 except Exception as e:
     logger.error(f"❌ Initialization error: {str(e)}")
     raise
@@ -427,6 +430,146 @@ def clear_memory():
         return jsonify({"success": True, "message": "Memory cleared"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ========================
+# AUTONOMOUS EXECUTION
+# ========================
+
+@app.route("/api/autonomous/execute", methods=["POST", "OPTIONS"])
+def autonomous_execute():
+    """
+    Execute a task using the REAL autonomous agent loop
+    
+    This is the PRIMARY execution endpoint for real computer control.
+    
+    Request JSON:
+    {
+        "task": "user command",
+        "max_steps": 150,
+        "task_id": "optional_id"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "task_id": "task_xxx",
+        "result": "what was done",
+        "steps_taken": 5,
+        "tools_used": ["click", "type"],
+        "execution_time": 2.5,
+        "final_state": "screen description"
+    }
+    """
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No JSON data provided"
+            }), 400
+        
+        # Extract parameters
+        task_command = data.get("task", "").strip()
+        max_steps = data.get("max_steps", 150)
+        task_id = data.get("task_id", None)
+        
+        if not task_command:
+            return jsonify({
+                "success": False,
+                "error": "Empty task"
+            }), 400
+        
+        logger.info(f"\n{'='*60}")
+        logger.info(f"🤖 AUTONOMOUS AGENT STARTING TASK")
+        logger.info(f"Task: {task_command}")
+        logger.info(f"Max Steps: {max_steps}")
+        logger.info(f"{'='*60}")
+        
+        # Store in memory
+        try:
+            memory.add_conversation("user", task_command, {"task_id": task_id, "autonomous": True})
+        except Exception as e:
+            logger.warning(f"Memory store error: {e}")
+        
+        # Execute using autonomous agent
+        import asyncio
+        import time
+        
+        start_time = time.time()
+        
+        # Run the autonomous agent loop
+        try:
+            # Use asyncio to run the async task
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            result = loop.run_until_complete(
+                autonomous_agent.execute_autonomous_task(
+                    user_intent=task_command,
+                    task_id=task_id,
+                    max_steps=max_steps
+                )
+            )
+            
+            execution_time = time.time() - start_time
+            
+            logger.info(f"✅ AUTONOMOUS TASK COMPLETE")
+            logger.info(f"Execution time: {execution_time:.2f}s")
+            logger.info(f"Result: {str(result)[:100]}...")
+            
+            # Extract meaningful summary
+            success = result.get("status") == "completed"
+            summary = result.get("summary", "Task execution completed")
+            
+            # Store result
+            try:
+                memory.add_conversation("assistant", summary, {
+                    "autonomous": True,
+                    "task_id": task_id,
+                    "success": success
+                })
+            except Exception as e:
+                logger.warning(f"Memory result store error: {e}")
+            
+            return jsonify({
+                "success": success,
+                "task_id": task_id,
+                "result": summary,
+                "steps_taken": result.get("step_count", 0),
+                "tools_used": result.get("tools_used", []),
+                "execution_time": execution_time,
+                "final_state": result.get("final_description", ""),
+                "actions": result.get("actions", []),
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        except Exception as agent_error:
+            execution_time = time.time() - start_time
+            error_msg = str(agent_error)
+            logger.error(f"❌ Agent execution error: {error_msg}", exc_info=True)
+            
+            return jsonify({
+                "success": False,
+                "task_id": task_id,
+                "error": error_msg,
+                "execution_time": execution_time,
+                "timestamp": datetime.now().isoformat()
+            }), 500
+    
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"❌ Autonomous execute error: {error_msg}", exc_info=True)
+        
+        return jsonify({
+            "success": False,
+            "error": error_msg,
+            "timestamp": datetime.now().isoformat()
+        }), 500
 
 
 # ========================
