@@ -2,88 +2,61 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from commands import execute_command
+from ai_brain import ask_ai
 
 app = Flask(__name__)
+CORS(app)
 
-# FULL CORS FIX
-CORS(
-    app,
-    resources={
-        r"/*": {
-            "origins": "*"
-        }
-    }
-)
 
-# HOME
 @app.route("/")
-
 def home():
-
     return jsonify({
-
-        "message":
-        "Jarvis API is running",
-
-        "endpoints": {
-
-            "POST /command":
-            "Execute a command"
-
-        }
+        "status": "Jarvis Running"
     })
 
-# COMMAND API
-@app.route(
-    "/command",
-    methods=["POST"]
-)
 
+@app.route("/command", methods=["POST"])
 def command():
 
     try:
 
-        data = request.get_json()
+        data = request.json
 
         user_command = data.get(
             "command",
             ""
         )
 
-        print(
-            "USER COMMAND:",
+        print("\nUSER:", user_command)
+
+        local_response = execute_command(
             user_command
         )
 
-        response = execute_command(
-            user_command
-        )
+        if "not recognized" in local_response.lower():
+            response = ask_ai(user_command)
+        else:
+            response = local_response
+
+        print("JARVIS:", response)
 
         return jsonify({
-
-            "success": True,
-
             "response": response
-
         })
 
     except Exception as e:
 
-        print("ERROR:", e)
+        print("ERROR:", str(e))
 
         return jsonify({
-
-            "success": False,
-
             "response": str(e)
+        })
 
-        }), 500
 
-# START SERVER
 if __name__ == "__main__":
 
     app.run(
-        debug=True,
         host="0.0.0.0",
-        port=5000
+        port=5000,
+        debug=True
     )

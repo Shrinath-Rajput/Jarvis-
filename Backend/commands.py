@@ -1,196 +1,70 @@
-import os
-import webbrowser
-import pyautogui
-import google.generativeai as genai
+import ollama
+import json
 
-# GEMINI API KEY
-genai.configure(
-    api_key="AIzaSyBmuBZCsR4hMJy1w5FOJ6BSMkhZyT6mWM0"
-)
 
-model = genai.GenerativeModel(
-    "gemini-1.5-flash"
-)
+TOOLS = """
+Available tools:
 
-def execute_command(command):
+1. open_app(app_name)
+2. search_google(query)
+3. search_youtube(query)
+4. create_folder(name)
+5. write_text(text)
+6. take_screenshot()
 
-    print("USER:", command)
+Return ONLY JSON list.
 
-    command = command.lower()
+Example:
 
-    # DIRECT FAST COMMANDS
+[
+  {
+    "tool": "open_app",
+    "app": "chrome"
+  }
+]
+"""
 
-    if "shutdown" in command:
 
-        os.system("shutdown /s /t 5")
-
-        return "Shutting down"
-
-    if "restart" in command:
-
-        os.system("shutdown /r /t 5")
-
-        return "Restarting"
-
-    if "screenshot" in command:
-
-        img = pyautogui.screenshot()
-
-        img.save("screenshot.png")
-
-        return "Screenshot taken"
-
-    # AI BRAIN
+def create_plan(command):
 
     prompt = f"""
-
-You are an advanced AI desktop assistant.
-
-Understand user intent.
+You are an AI planner.
 
 User command:
 {command}
 
-Return ONLY one action from below:
+{TOOLS}
 
-OPEN_CHROME
-OPEN_YOUTUBE
-OPEN_GOOGLE
-OPEN_VSCODE
-OPEN_CALCULATOR
-OPEN_NOTEPAD
-SEARCH_GOOGLE:query
-SEARCH_YOUTUBE:query
-VOLUME_UP
-VOLUME_DOWN
-MUTE
-UNKNOWN
-
-Examples:
-
-open chrome
--> OPEN_CHROME
-
-go to youtube and search arijit songs
--> SEARCH_YOUTUBE:arijit songs
-
-search iron man trailer
--> SEARCH_GOOGLE:iron man trailer
-
-open vscode
--> OPEN_VSCODE
+Generate action plan.
+Only return JSON.
 """
 
-    response = model.generate_content(
-        prompt
+    response = ollama.chat(
+        model='tinyllama',
+        messages=[
+            {
+                'role': 'user',
+                'content': prompt
+            }
+        ]
     )
 
-    ai_response = (
-        response.text.strip()
-    )
+    text = response['message']['content']
 
-    print("AI:", ai_response)
+    try:
 
-    # ACTION ENGINE
+        start = text.find("[")
 
-    if ai_response == "OPEN_CHROME":
+        end = text.rfind("]") + 1
 
-        os.system("start chrome")
+        json_text = text[start:end]
 
-        return "Opening Chrome"
-
-    elif ai_response == "OPEN_YOUTUBE":
-
-        webbrowser.open(
-            "https://youtube.com"
+        actions = json.loads(
+            json_text
         )
 
-        return "Opening YouTube"
+        return actions
 
-    elif ai_response == "OPEN_GOOGLE":
+    except:
 
-        webbrowser.open(
-            "https://google.com"
-        )
-
-        return "Opening Google"
-
-    elif ai_response == "OPEN_VSCODE":
-
-        os.system("code")
-
-        return "Opening VS Code"
-
-    elif ai_response == "OPEN_CALCULATOR":
-
-        os.system("calc")
-
-        return "Opening Calculator"
-
-    elif ai_response == "OPEN_NOTEPAD":
-
-        os.system("notepad")
-
-        return "Opening Notepad"
-
-    elif (
-        "SEARCH_GOOGLE:"
-        in ai_response
-    ):
-
-        query = ai_response.replace(
-            "SEARCH_GOOGLE:",
-            ""
-        )
-
-        webbrowser.open(
-            f"https://www.google.com/search?q={query}"
-        )
-
-        return f"Searching {query}"
-
-    elif (
-        "SEARCH_YOUTUBE:"
-        in ai_response
-    ):
-
-        query = ai_response.replace(
-            "SEARCH_YOUTUBE:",
-            ""
-        )
-
-        webbrowser.open(
-            f"https://www.youtube.com/results?search_query={query}"
-        )
-
-        return f"Searching YouTube for {query}"
-
-    elif ai_response == "VOLUME_UP":
-
-        pyautogui.press(
-            "volumeup"
-        )
-
-        return "Volume increased"
-
-    elif ai_response == "VOLUME_DOWN":
-
-        pyautogui.press(
-            "volumedown"
-        )
-
-        return "Volume decreased"
-
-    elif ai_response == "MUTE":
-
-        pyautogui.press(
-            "volumemute"
-        )
-
-        return "Muted"
-
-    else:
-
-        return (
-            "I understood but cannot execute yet"
-        )
+        return []
