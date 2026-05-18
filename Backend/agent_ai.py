@@ -1,4 +1,4 @@
-from Backend.planner_ai import plan_task
+from planner_ai import create_plan
 
 from tools import (
     open_app,
@@ -10,68 +10,92 @@ from tools import (
 )
 
 
-# ------------------------
-# EXECUTE ACTIONS
-# ------------------------
-
 def run_agent(command):
 
     print(
-        "USER COMMAND:",
+        "\nUSER:",
         command
     )
 
-    actions = plan_task(command)
+    actions = create_plan(
+        command
+    )
 
     print(
-        "PLANNED ACTIONS:",
+        "\nAI PLAN:",
         actions
     )
+
+    if not actions:
+
+        return (
+            "AI could not create plan"
+        )
 
     results = []
 
     for action in actions:
 
-        tool = action["tool"]
+        tool = action.get(
+            "tool"
+        )
 
         try:
 
+            # =========================
             # OPEN APP
+            # =========================
+
             if tool == "open_app":
 
                 result = open_app(
-                    action["app"]
+                    action.get("app")
                 )
 
-            # SEARCH GOOGLE
+            # =========================
+            # GOOGLE SEARCH
+            # =========================
+
             elif tool == "search_google":
 
                 result = search_google(
-                    action["query"]
+                    action.get("query")
                 )
 
-            # SEARCH YOUTUBE
+            # =========================
+            # YOUTUBE SEARCH
+            # =========================
+
             elif tool == "search_youtube":
 
                 result = search_youtube(
-                    action["query"]
+                    action.get("query")
                 )
 
+            # =========================
             # CREATE FOLDER
+            # =========================
+
             elif tool == "create_folder":
 
                 result = create_folder(
-                    action["name"]
+                    action.get("name")
                 )
 
+            # =========================
             # WRITE TEXT
+            # =========================
+
             elif tool == "write_text":
 
                 result = write_text(
-                    action["text"]
+                    action.get("text")
                 )
 
+            # =========================
             # SCREENSHOT
+            # =========================
+
             elif tool == "take_screenshot":
 
                 result = take_screenshot()
@@ -79,19 +103,15 @@ def run_agent(command):
             else:
 
                 result = (
-                    f"Unknown tool {tool}"
+                    f"Unknown tool: {tool}"
                 )
 
             results.append(result)
 
         except Exception as e:
 
-            results.append(str(e))
-
-    if not results:
-
-        return (
-            "No actions planned"
-        )
+            results.append(
+                str(e)
+            )
 
     return "\n".join(results)

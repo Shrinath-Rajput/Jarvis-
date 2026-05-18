@@ -1,125 +1,159 @@
-def plan_task(command):
+def create_plan(command):
 
-    cmd = command.lower()
+    command = command.lower()
 
     actions = []
 
-    # OPEN CHROME
-    if "chrome" in cmd:
+    # =========================
+    # CHROME / GOOGLE
+    # =========================
+
+    if (
+        "chrome" in command
+        or "google" in command
+    ):
 
         actions.append({
-
             "tool": "open_app",
-
             "app": "chrome"
-
         })
 
-    # OPEN VSCODE
-    if (
-        "vs code" in cmd
-        or "vscode" in cmd
-    ):
+        if "search" in command:
 
-        actions.append({
-
-            "tool": "open_app",
-
-            "app": "vscode"
-
-        })
-
-    # OPEN NOTEPAD
-    if "notepad" in cmd:
-
-        actions.append({
-
-            "tool": "open_app",
-
-            "app": "notepad"
-
-        })
-
-    # YOUTUBE SEARCH
-    if (
-        "youtube" in cmd
-        and "search" in cmd
-    ):
-
-        query = (
-            cmd
-            .replace("youtube", "")
-            .replace("search", "")
-        )
-
-        actions.append({
-
-            "tool": "search_youtube",
-
-            "query": query
-
-        })
-
-    # GOOGLE SEARCH
-    elif "search" in cmd:
-
-        query = cmd.replace(
-            "search",
-            ""
-        )
-
-        actions.append({
-
-            "tool": "search_google",
-
-            "query": query
-
-        })
-
-    # CREATE FOLDER
-    if (
-        "create" in cmd
-        and "folder" in cmd
-    ):
-
-        words = cmd.split()
-
-        folder_name = "NewFolder"
-
-        try:
-
-            index = words.index(
-                "create"
+            query = (
+                command
+                .split("search")[-1]
+                .replace("for", "")
+                .strip()
             )
 
-            folder_name = words[
-                index + 1
-            ]
+            actions.append({
+                "tool": "search_google",
+                "query": query
+            })
 
-        except:
-            pass
+    # =========================
+    # YOUTUBE
+    # =========================
+
+    elif "youtube" in command:
+
+        if "search" in command:
+
+            query = (
+                command
+                .replace("youtube", "")
+                .replace("search", "")
+                .replace("for", "")
+                .strip()
+            )
+
+            actions.append({
+                "tool": "search_youtube",
+                "query": query
+            })
+
+        else:
+
+            actions.append({
+                "tool": "open_app",
+                "app": "youtube"
+            })
+
+    # =========================
+    # VS CODE
+    # =========================
+
+    elif (
+        "vs code" in command
+        or "vscode" in command
+    ):
 
         actions.append({
-
-            "tool": "create_folder",
-
-            "name": folder_name
-
+            "tool": "open_app",
+            "app": "vscode"
         })
 
-    # WRITE TEXT
-    if "write" in cmd:
+        # CREATE FOLDER
+        if (
+            "create" in command
+            and "folder" in command
+        ):
 
-        text = cmd.split(
-            "write"
-        )[-1]
+            import re
+
+            folder_name = "project"
+
+            match = re.search(
+                r'folder (.*)',
+                command
+            )
+
+            if match:
+
+                folder_name = (
+                    match.group(1)
+                    .strip()
+                    .replace(" ", "_")
+                )
+
+            actions.append({
+                "tool": "create_folder",
+                "name": folder_name
+            })
+
+        # WRITE CODE
+        if (
+            "hello world" in command
+            or "python" in command
+        ):
+
+            actions.append({
+                "tool": "write_text",
+                "text": 'print("Hello World")'
+            })
+
+    # =========================
+    # NOTEPAD
+    # =========================
+
+    elif "notepad" in command:
 
         actions.append({
+            "tool": "open_app",
+            "app": "notepad"
+        })
 
-            "tool": "write_text",
+        if "write" in command:
 
-            "text": text
+            text = (
+                command
+                .split("write")[-1]
+                .strip()
+            )
 
+            if (
+                "python" in text
+                or "hello world" in text
+            ):
+
+                text = (
+                    'print("Hello World")'
+                )
+
+            actions.append({
+                "tool": "write_text",
+                "text": text
+            })
+
+    # =========================
+    # SCREENSHOT
+    # =========================
+
+    elif "screenshot" in command:
+
+        actions.append({
+            "tool": "take_screenshot"
         })
 
     return actions
