@@ -30,10 +30,10 @@ class BackendExecutor {
    */
   async checkHealth() {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/autonomous/health`);
+      const response = await fetch(`${BACKEND_URL}/health`);
       const data = await response.json();
-      this.isConnected = data.success;
-      return data;
+      this.isConnected = data.status === 'healthy' || data.status === 'ok';
+      return { success: this.isConnected, ...data };
     } catch (error) {
       console.error('Backend health check failed:', error);
       this.isConnected = false;

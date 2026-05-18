@@ -33,23 +33,21 @@ logger = logging.getLogger(__name__)
 # Initialize Flask
 app = Flask(__name__)
 
-# Configure CORS properly
+# Configure CORS - use specific origins for development
 if CORS_ENABLED:
+    # Allow frontend on localhost:5173 (Vite dev server)
+    # and production URLs as needed
     CORS(app, 
-         origins="*",
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         allow_headers=["Content-Type", "Authorization"],
-         supports_credentials=False,
-         max_age=3600)
-
-# Add additional CORS headers to all responses
-@app.after_request
-def after_request(response):
-    if CORS_ENABLED:
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+         resources={
+             r"/*": {
+                 "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization"],
+                 "supports_credentials": False,
+                 "max_age": 3600
+             }
+         }
+    )
 
 # Initialize components
 try:
