@@ -1,261 +1,324 @@
-"""
-Advanced Planning Engine using Gemini AI
-Breaks down user requests into executable action plans
-"""
+# ==========================================
+# FINAL FULL DYNAMIC planner_ai.py
+# NO HARDCODED COMMANDS
+# ==========================================
+
 import json
-import logging
-from ai_brain import get_ai
-from config import DEBUG
+import google.generativeai as genai
 
-logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
-logger = logging.getLogger(__name__)
+# ==========================================
+# GEMINI CONFIG
+# ==========================================
 
-# ========================
-# PLANNING PROMPTS
-# ========================
+genai.configure(
 
-PLANNING_SYSTEM_PROMPT = """
-You are an expert task planner and coordinator.
+    api_key="YOUR_GEMINI_API_KEY"
+)
+
+model = genai.GenerativeModel(
+    "gemini-1.5-pro"
+)
+
+# ==========================================
+# SYSTEM PROMPT
+# ==========================================
+
+SYSTEM_PROMPT = """
+You are a REAL autonomous computer AI agent.
 
 Your job:
-1. Understand the user's request completely
-2. Break it down into logical steps
-3. Return a JSON action plan
+Convert ANY user request into executable JSON actions.
 
-Available browser actions:
-- navigate_to: Navigate to a website
-- wait_for: Wait for element to appear
-- click: Click an element by text or XPath
-- type: Type text into a field
-- submit_form: Submit a form
-- extract_data: Extract data from page
-- wait_seconds: Wait for N seconds
-- screenshot: Take screenshot
-- go_back: Go to previous page
+You are NOT hardcoded.
 
-Available system actions:
-- open_app: Open application
-- open_website: Open website
-- search_google: Search Google
-- search_youtube: Search YouTube
-- create_folder: Create folder
-- write_file: Write to file
-- execute_command: Run system command
+You must THINK like a human computer operator.
 
-Available data actions:
-- parse_text: Parse text from screenshot
-- extract_emails: Extract emails
-- format_data: Format/transform data
-- summarize: Summarize content
+You can use ONLY these tools:
 
-Important Rules:
-1. Return ONLY valid JSON (no markdown, no explanations)
-2. Return array of action objects
-3. Each action must have "tool" and "params" keys
-4. Include "wait" actions between rapid operations
-5. Think about realistic timings
-6. Consider what user actually wants, not literal words
-7. Use common sense - "open youtube and play songs" means multiple steps
-8. Order actions logically
+1. open_website
+2. open_app
+3. open_folder
+4. click_text
+5. click
+6. type
+7. press_key
+8. hotkey
+9. wait
+10. create_folder
 
-Example valid response:
-[
-  {"tool": "open_website", "params": {"site": "youtube"}},
-  {"tool": "wait_seconds", "params": {"seconds": 3}},
-  {"tool": "type", "params": {"text": "Arijit Singh"}},
-  {"tool": "click", "params": {"text": "Search"}}
-]
+==================================================
+TOOL USAGE RULES
+==================================================
 
-Return ONLY the JSON array, nothing else.
+1. WEBSITE / INTERNET SERVICES
+
+If the task mentions:
+websites,
+platforms,
+online services,
+AI tools,
+social media,
+streaming,
+developer platforms,
+cloud dashboards,
+internet tools,
+or browser-based systems
+
+→ use:
+open_website
+
+Examples:
+ChatGPT
+Gemini
+Netflix
+YouTube
+Instagram
+Facebook
+Railway
+Render
+GitHub
+Canva
+Gmail
+Spotify
+Figma
+Notion
+
+==================================================
+
+2. WINDOWS APPLICATIONS
+
+If the task mentions:
+desktop software,
+Windows apps,
+installed software,
+system programs,
+local applications
+
+→ use:
+open_app
+
+Examples:
+notepad
+paint
+calculator
+cmd
+chrome
+vscode
+explorer
+blender
+photoshop
+
+==================================================
+
+3. FOLDERS / DRIVES
+
+If user mentions:
+drive,
+folder,
+directory,
+desktop,
+downloads,
+documents
+
+→ use:
+open_folder
+
+Examples:
+C drive
+D drive
+Desktop
+Downloads
+
+==================================================
+
+4. INTERACTION
+
+If user wants:
+search,
+login,
+send,
+enter,
+write,
+type,
+submit,
+create,
+click,
+play
+
+→ use combinations of:
+
+click_text
+type
+press_key
+hotkey
+
+==================================================
+
+5. SPELLING CORRECTION
+
+Automatically fix spelling mistakes.
+
+Examples:
+
+chat gbt → ChatGPT
+chat gbd → ChatGPT
+gemeni → Gemini
+spotfy → Spotify
+netflx → Netflix
+insta → Instagram
+utub → YouTube
+
+==================================================
+
+6. SEARCH TASKS
+
+If user asks to search something:
+
+FIRST:
+open website
+
+THEN:
+click search box if needed
+
+THEN:
+type query
+
+THEN:
+press enter
+
+==================================================
+
+7. CLICKING
+
+Use:
+click_text
+
+for visible buttons/texts.
+
+Example:
+
+{
+  "tool":"click_text",
+  "params":{
+    "text":"Sign In"
+  }
+}
+
+==================================================
+
+8. THINKING
+
+Infer missing details intelligently.
+
+Example:
+
+User:
+open railway
+
+You understand:
+https://railway.app
+
+User:
+open netflix
+
+You understand:
+https://www.netflix.com
+
+User:
+open chatgpt
+
+You understand:
+https://chat.openai.com
+
+==================================================
+
+9. RESPONSE FORMAT
+
+Return ONLY valid JSON array.
+
+Do NOT explain anything.
+
+Do NOT use markdown.
+
+==================================================
 """
 
-# ========================
-# PLAN CREATION
-# ========================
+# ==========================================
+# GENERATE PLAN
+# ==========================================
 
-class PlannerAI:
-    """
-    Advanced planning engine for breaking down user requests
-    """
+def generate_plan(task):
 
-    def __init__(self):
-        self.ai = get_ai()
-        self.plan_history = []
-        logger.info("Initialized PlannerAI")
+    prompt = f"""
+{SYSTEM_PROMPT}
 
-    def create_plan(self, user_request, context=""):
-        """
-        Create an action plan from user request
-
-        Args:
-            user_request: What the user wants to do
-            context: Additional context (previous actions, etc.)
-
-        Returns:
-            List of actions to execute
-        """
-        try:
-            # Create prompt with context
-            full_prompt = f"""
-{context}
-
-USER REQUEST: {user_request}
-
-Create a detailed action plan for this request. 
-Think step-by-step about what needs to happen.
-Return ONLY a valid JSON array of actions.
+User Task:
+{task}
 """
 
-            logger.info(f"Planning: {user_request[:100]}...")
+    try:
 
-            # Get plan from AI
-            response = self.ai.chat(full_prompt, "You are a planning expert.")
+        response = model.generate_content(
+            prompt
+        )
 
-            # Extract JSON from response
-            plan = self._extract_json(response)
+        text = response.text.strip()
 
-            if not plan:
-                logger.warning("Could not extract plan from response")
-                return []
+        # REMOVE MARKDOWN
+        text = text.replace(
+            "```json",
+            ""
+        )
 
-            # Validate plan
-            validated_plan = self._validate_plan(plan)
+        text = text.replace(
+            "```",
+            ""
+        )
 
-            logger.info(f"Created plan with {len(validated_plan)} actions")
-            logger.debug(f"Plan: {validated_plan}")
+        print("================================")
+        print("AI GENERATED PLAN")
+        print("================================")
+        print(text)
 
-            # Store in history
-            self.plan_history.append({
-                'request': user_request,
-                'plan': validated_plan
-            })
+        plan = json.loads(text)
 
-            return validated_plan
+        return plan
 
-        except Exception as e:
-            logger.error(f"Plan creation error: {str(e)}")
-            return []
+    except Exception as e:
 
-    def _extract_json(self, text):
-        """Extract JSON array from text response"""
-        try:
-            # Find JSON array
-            start = text.find('[')
-            end = text.rfind(']') + 1
+        print("PLANNER ERROR:", str(e))
 
-            if start == -1 or end == 0:
-                logger.warning("No JSON array found in response")
-                return None
+        # ==================================
+        # SAFE FALLBACK
+        # ==================================
 
-            json_text = text[start:end]
-            plan = json.loads(json_text)
+        return [
 
-            return plan if isinstance(plan, list) else None
+            {
+                "tool":"open_website",
 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {str(e)}")
-            return None
+                "params":{
 
-    def _validate_plan(self, plan):
-        """Validate and sanitize action plan"""
-        if not isinstance(plan, list):
-            return []
+                    "url":
+                    "https://www.google.com"
+                }
+            },
 
-        valid_actions = []
+            {
+                "tool":"type",
 
-        for action in plan:
-            if not isinstance(action, dict):
-                continue
+                "params":{
 
-            tool = action.get('tool', '')
-            params = action.get('params', {})
+                    "text": task
+                }
+            },
 
-            # Validate tool exists
-            if not tool:
-                logger.warning(f"Action missing tool: {action}")
-                continue
+            {
+                "tool":"press_key",
 
-            # Validate params is dict
-            if not isinstance(params, dict):
-                params = {}
+                "params":{
 
-            valid_actions.append({
-                'tool': tool,
-                'params': params
-            })
-
-        return valid_actions
-
-    def refine_plan(self, plan, feedback):
-        """Refine a plan based on feedback"""
-        try:
-            prompt = f"""
-Current plan:
-{json.dumps(plan, indent=2)}
-
-Feedback/Issue:
-{feedback}
-
-Create a refined plan that addresses the feedback.
-Return ONLY a valid JSON array of actions.
-"""
-            response = self.ai.chat(prompt)
-            refined_plan = self._extract_json(response)
-            return self._validate_plan(refined_plan) if refined_plan else plan
-
-        except Exception as e:
-            logger.error(f"Plan refinement error: {str(e)}")
-            return plan
-
-    def explain_plan(self, plan):
-        """Explain what a plan will do"""
-        try:
-            prompt = f"""
-Explain this action plan in simple terms for a user:
-{json.dumps(plan, indent=2)}
-
-Be concise and clear about what will happen.
-"""
-            return self.ai.chat(prompt)
-        except Exception as e:
-            logger.error(f"Explanation error: {str(e)}")
-            return "Could not explain plan"
-
-
-# ========================
-# GLOBAL INSTANCE
-# ========================
-
-_planner = None
-
-def get_planner():
-    """Get global planner instance"""
-    global _planner
-    if _planner is None:
-        _planner = PlannerAI()
-    return _planner
-
-def create_plan(command, context=""):
-    """Quick function to create a plan"""
-    return get_planner().create_plan(command, context)
-
-# ========================
-# TESTING
-# ========================
-
-if __name__ == "__main__":
-    print("Testing Planner AI...")
-    planner = get_planner()
-    
-    test_request = "Open YouTube and search for Arijit Singh songs"
-    plan = planner.create_plan(test_request)
-    
-    print(f"\nRequest: {test_request}")
-    print(f"\nGenerated Plan:")
-    print(json.dumps(plan, indent=2))
-    
-    if plan:
-        explanation = planner.explain_plan(plan)
-        print(f"\nExplanation:\n{explanation}")
-    
-    print("\n✅ Planner test complete")
+                    "key":"enter"
+                }
+            }
+        ]
