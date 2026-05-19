@@ -1,6 +1,4 @@
-/**
- * FINAL WORKING VOICE ENGINE
- */
+import { getBackendExecutor } from './BackendExecutor.js';
 
 export class VoiceEngine {
 
@@ -21,26 +19,19 @@ export class VoiceEngine {
     this.isWakeWordActive = false;
     this.isListeningWake = false;
 
-    // MAIN COMMAND LISTENER
     if (this.recognition) {
-
       this.recognition.continuous = false;
       this.recognition.interimResults = true;
       this.recognition.lang = "en-US";
-
     }
 
-    // WAKE WORD LISTENER
     if (this.wakeRecognition) {
-
       this.wakeRecognition.continuous = true;
       this.wakeRecognition.interimResults = true;
       this.wakeRecognition.lang = "en-US";
-
     }
   }
 
-  // START WAKE WORD
   startWakeWord(onWakeDetected, onMicLevel) {
 
     if (!this.wakeRecognition) return;
@@ -56,25 +47,19 @@ export class VoiceEngine {
         i < event.results.length;
         ++i
       ) {
-
         combined +=
           event.results[i][0].transcript.toLowerCase();
-
       }
 
-      // VISUAL EFFECT
       if (
         onMicLevel &&
         combined.trim().length > 0
       ) {
-
         onMicLevel(
           Math.random() * 0.5 + 0.5
         );
-
       }
 
-      // WAKE WORDS
       if (
         combined.includes("jarvis") ||
         combined.includes("premex") ||
@@ -87,7 +72,6 @@ export class VoiceEngine {
         this.stopWakeWord();
 
         onWakeDetected();
-
       }
     };
 
@@ -98,6 +82,9 @@ export class VoiceEngine {
         event.error
       );
 
+      if (event.error === 'not-allowed') {
+        this.stopWakeWord();
+      }
     };
 
     this.wakeRecognition.onend = () => {
@@ -115,7 +102,6 @@ export class VoiceEngine {
               this.wakeRecognition.start();
 
               this.isListeningWake = true;
-
             }
 
           } catch (e) {}
@@ -131,7 +117,6 @@ export class VoiceEngine {
         this.wakeRecognition.start();
 
         this.isListeningWake = true;
-
       }
 
     } catch (e) {
@@ -139,11 +124,9 @@ export class VoiceEngine {
       console.log(
         "Wake already running"
       );
-
     }
   }
 
-  // STOP WAKE WORD
   stopWakeWord() {
 
     this.isWakeWordActive = false;
@@ -157,11 +140,12 @@ export class VoiceEngine {
         this.isListeningWake = false;
 
       } catch (e) {}
-
     }
   }
 
-  // MAIN LISTEN FUNCTION
+  // ✅ ONLY RETURN TRANSCRIPT
+  // ❌ NO BACKEND EXECUTION HERE
+
   listen(onInterim) {
 
     return new Promise((resolve, reject) => {
@@ -179,7 +163,7 @@ export class VoiceEngine {
 
       let finalTranscript = "";
 
-      this.recognition.onresult = async (
+      this.recognition.onresult = (
         event
       ) => {
 
@@ -200,7 +184,6 @@ export class VoiceEngine {
 
             interim +=
               event.results[i][0].transcript;
-
           }
         }
 
@@ -209,114 +192,6 @@ export class VoiceEngine {
           onInterim(
             interim || finalTranscript
           );
-
-        }
-
-        // SEND COMMAND TO BACKEND
-        if (
-          finalTranscript &&
-          finalTranscript.trim().length > 0
-        ) {
-
-          console.log(
-            "USER:",
-            finalTranscript
-          );
-
-          try {
-
-            console.log(
-              "[VoiceEngine] Sending:",
-              finalTranscript
-            );
-
-            const response =
-              await fetch(
-                "http://10.97.207.209:5000/command",
-                {
-                  method: "POST",
-
-                  headers: {
-                    "Content-Type":
-                      "application/json",
-                  },
-
-                  body: JSON.stringify({
-                    command: finalTranscript,
-                  }),
-                }
-              );
-
-            if (!response.ok) {
-              console.error(
-                `[VoiceEngine] Server error: ${response.status}`
-              );
-              throw new Error(
-                `Server error: ${response.status}`
-              );
-            }
-
-            const data =
-              await response.json();
-
-            console.log(
-              "[VoiceEngine] Response data:",
-              data
-            );
-
-            let responseText = 
-              data.response || "";
-
-            if (!responseText || 
-                responseText.trim().length === 0) {
-              console.warn(
-                "[VoiceEngine] Empty response"
-              );
-              responseText = 
-                `Processing your request: ${finalTranscript}`;
-            }
-
-            console.log(
-              "[VoiceEngine] Speaking:",
-              responseText
-            );
-
-            // SPEAK RESPONSE
-            const speech =
-              new SpeechSynthesisUtterance(
-                responseText
-              );
-
-            speech.rate = 1;
-            speech.pitch = 1;
-
-            window.speechSynthesis.speak(
-              speech
-            );
-
-          } catch (error) {
-
-            console.error(
-              "[VoiceEngine] Error:",
-              error.message || error
-            );
-
-            const fallbackMsg = 
-              `Processing your request to ${finalTranscript}`;
-            
-            const speech =
-              new SpeechSynthesisUtterance(
-                fallbackMsg
-              );
-            
-            speech.rate = 1;
-            speech.pitch = 1;
-
-            window.speechSynthesis.speak(
-              speech
-            );
-
-          }
         }
       };
 
@@ -330,13 +205,11 @@ export class VoiceEngine {
         );
 
         reject(event.error);
-
       };
 
       this.recognition.onend = () => {
 
         resolve(finalTranscript);
-
       };
 
       try {
@@ -346,12 +219,10 @@ export class VoiceEngine {
       } catch (e) {
 
         reject(e);
-
       }
     });
   }
 
-  // STOP LISTENER
   stop() {
 
     if (this.recognition) {
@@ -361,7 +232,6 @@ export class VoiceEngine {
         this.recognition.stop();
 
       } catch (e) {}
-
     }
   }
 }

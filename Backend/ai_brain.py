@@ -6,6 +6,7 @@ import google.generativeai as genai
 import ollama
 import json
 import logging
+import asyncio
 from config import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
@@ -104,6 +105,58 @@ class GeminiAI:
             logger.error(f"Gemini error: {str(e)}")
             # Fallback to Ollama
             return self._fallback_ollama(user_message)
+
+    async def generate_response(self, prompt: str) -> str:
+        """
+        Generate a response to a prompt (async version for autonomous agent)
+        
+        Args:
+            prompt: The prompt to respond to
+            
+        Returns:
+            Response text
+        """
+        try:
+            logger.info(f"[Gemini] Generating response for prompt ({len(prompt)} chars)")
+            
+            # Run in thread to avoid blocking async loop
+            response = await asyncio.to_thread(self._generate_response_sync, prompt)
+            
+            if response:
+                logger.info(f"[Gemini] ✅ Generated {len(response)} char response")
+                return response
+            else:
+                logger.warning("[Gemini] ⚠️ Empty response generated")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Gemini] ❌ Error generating response: {str(e)}", exc_info=True)
+            return None
+    
+    def _generate_response_sync(self, prompt: str) -> str:
+        """
+        Synchronous response generation (called from async context)
+        
+        Args:
+            prompt: The prompt to respond to
+            
+        Returns:
+            Response text
+        """
+        try:
+            logger.debug(f"[Gemini] Calling generate_content...")
+            response = self.model.generate_content(prompt)
+            
+            if response and response.text:
+                logger.debug(f"[Gemini] Response text: {response.text[:300]}...")
+                return response.text
+            else:
+                logger.warning("[Gemini] No text in response")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Gemini] Sync generation error: {str(e)}", exc_info=True)
+            return None
 
     def analyze_image(self, image_path, question=""):
         """
@@ -245,6 +298,68 @@ class OllamaAI:
         except Exception as e:
             logger.error(f"Ollama error: {str(e)}")
             return "Error: Could not generate response"
+
+    async def generate_response(self, prompt: str) -> str:
+        """
+        Generate a response to a prompt (async version for autonomous agent)
+        
+        Args:
+            prompt: The prompt to respond to
+            
+        Returns:
+            Response text
+        """
+        try:
+            logger.info(f"[Ollama] Generating response for prompt ({len(prompt)} chars)")
+            
+            # Run in thread to avoid blocking async loop
+            response = await asyncio.to_thread(self._generate_response_sync, prompt)
+            
+            if response:
+                logger.info(f"[Ollama] ✅ Generated {len(response)} char response")
+                return response
+            else:
+                logger.warning("[Ollama] ⚠️ Empty response generated")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Ollama] ❌ Error generating response: {str(e)}", exc_info=True)
+            return None
+    
+    def _generate_response_sync(self, prompt: str) -> str:
+        """
+        Synchronous response generation (called from async context)
+        
+        Args:
+            prompt: The prompt to respond to
+            
+        Returns:
+            Response text
+        """
+        try:
+            logger.debug(f"[Ollama] Calling chat...")
+            response = ollama.chat(
+                model=self.model,
+                base_url=self.base_url,
+                messages=[
+                    {
+                        'role': 'user',
+                        'content': prompt
+                    }
+                ]
+            )
+            
+            if response and 'message' in response and 'content' in response['message']:
+                content = response['message']['content']
+                logger.debug(f"[Ollama] Response text: {content[:300]}...")
+                return content
+            else:
+                logger.warning("[Ollama] No content in response")
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Ollama] Sync generation error: {str(e)}", exc_info=True)
+            return None
 
 
 # ========================

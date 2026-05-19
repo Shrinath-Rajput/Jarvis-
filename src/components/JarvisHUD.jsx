@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedAvatar from './AnimatedAvatar';
 import { voiceEngine } from '../services/VoiceEngine';
 import { getGeminiResponse } from '../services/GeminiBrain';
-import { getBackendExecutor } from '../services/BackendExecutor';
+import backendExecutor, { getBackendExecutor } from '../services/BackendExecutor';
 
 /* ── Clock ─────────────────────────────────────────────────── */
 const useClock = () => {
@@ -576,8 +576,18 @@ const JarvisHUD = () => {
 
       // Display REAL backend result (not fake)
       if (result.success) {
-        // Format the real backend output
-        const feedbackText = result.output ? `${result.output}` : "Task completed successfully.";
+        // Safely extract response text from backend result structure
+        let feedbackText = "Task completed successfully.";
+        
+        if (typeof result.response === 'string' && result.response.trim().length > 0) {
+          feedbackText = result.response;
+        } else if (result.result && typeof result.result.response === 'string' && result.result.response.trim().length > 0) {
+          feedbackText = result.result.response;
+        } else if (result.result && typeof result.result === 'object') {
+          // If it's still an object, try to stringify it
+          feedbackText = JSON.stringify(result.result);
+        }
+        
         console.log("[BACKEND] Real execution result:", result);
         
         // Show real result
@@ -630,8 +640,17 @@ const JarvisHUD = () => {
       }
     } catch (e) {
       console.warn("STT Error:", e);
-      setUserTranscript('MIC ERROR');
-      setTimeout(() => setUserTranscript(''), 2000);
+      
+      // Check if it's a permission error
+      if (e.message?.includes('permission') || e.message?.includes('not-allowed')) {
+        setSpeechText("🔒 Microphone access denied. Please enable microphone in browser settings.");
+        setActiveVoiceText("Microphone permission required");
+        setUserTranscript('PERMISSION DENIED');
+      } else {
+        setUserTranscript('MIC ERROR');
+      }
+      
+      setTimeout(() => setUserTranscript(''), 3000);
     } finally {
       setIsListening(false);
     }
