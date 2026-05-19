@@ -1,419 +1,232 @@
-"""
-FINAL WORKING autonomous_agent_enhanced.py
-FULL STABLE VERSION
-YOUTUBE + GOOGLE + GEMINI + CHATGPT + VS CODE
-SEARCH + CLICK + TYPE + PLAY VIDEO
-"""
-
 import asyncio
-import logging
-import uuid
-from datetime import datetime
+from tool_implementations import ToolImplementations
 
-from tool_implementations import register_all_tools
-
-# =========================================================
-# LOGGING
-# =========================================================
-
-logging.basicConfig(level=logging.INFO)
-
-logger = logging.getLogger(__name__)
-
-# =========================================================
-# AGENT
-# =========================================================
 
 class EnhancedAutonomousAgent:
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
 
-        logger.info(
-            "🤖 Initializing Enhanced Agent..."
-        )
+        self.tools = ToolImplementations()
 
-        self.tool_registry = register_all_tools()
+        print("🤖 Enhanced Autonomous Agent Ready")
 
-        logger.info(
-            "✅ Enhanced Agent Ready"
-        )
-
-    # =====================================================
+    # ======================================================
     # MAIN EXECUTION
-    # =====================================================
+    # ======================================================
 
-    async def execute_autonomous_task(
+    async def execute_task(self, task):
 
-        self,
-        user_intent: str,
-        max_steps: int = 10
+        text = task.lower()
 
-    ):
-
-        task_id = (
-            f"task_{uuid.uuid4().hex[:8]}"
-        )
-
-        start_time = datetime.now()
+        print(f"🔥 TASK RECEIVED: {text}")
 
         try:
 
-            result = await self._execute(
-                user_intent.lower()
-            )
+            # ==================================================
+            # YOUTUBE
+            # ==================================================
 
-            end_time = datetime.now()
+            if "youtube" in text:
 
-            duration = (
-                end_time - start_time
-            ).total_seconds()
+                query = ""
 
-            return {
+                if "search" in text:
 
-                "success": True,
+                    query = text.split("search")[-1]
 
-                "status": "completed",
+                    query = (
+                        query
+                        .replace("play", "")
+                        .replace("first video", "")
+                        .replace("video", "")
+                        .replace("this", "")
+                        .strip()
+                    )
 
-                "task_id": task_id,
-
-                "user_intent": user_intent,
-
-                "duration_seconds": duration,
-
-                "result": result,
-
-                "created_at":
-                    start_time.isoformat(),
-
-                "completed_at":
-                    end_time.isoformat()
-            }
-
-        except Exception as e:
-
-            logger.error(str(e))
-
-            return {
-
-                "success": False,
-
-                "status": "failed",
-
-                "task_id": task_id,
-
-                "error": str(e)
-            }
-
-    # =====================================================
-    # EXECUTION ENGINE
-    # =====================================================
-
-    async def _execute(
-        self,
-        text: str
-    ):
-
-        logger.info(
-            f"🔥 EXECUTING: {text}"
-        )
-
-        # =================================================
-        # YOUTUBE
-        # =================================================
-
-        if "youtube" in text:
-
-            await self.tool_registry.execute_tool(
-                "open_website",
-                site_name="youtube"
-            )
-
-            await asyncio.sleep(5)
-
-            # CLICK SEARCH BAR
-            await self.tool_registry.execute_tool(
-                "click",
-                x=650,
-                y=115
-            )
-
-            await asyncio.sleep(1)
-
-            # SEARCH
-            if "search" in text:
-
-                query = text.split("search")[-1]
-
-                query = (
+                result = await self.tools.open_youtube_search(
                     query
-                    .replace("play", "")
-                    .replace("first video", "")
-                    .replace("video", "")
-                    .strip()
                 )
 
-                await self.tool_registry.execute_tool(
-                    "type_text",
-                    text=query
-                )
+                return {
 
-                await asyncio.sleep(1)
+                    "success": True,
 
-                await self.tool_registry.execute_tool(
-                    "press_key",
-                    key_name="enter"
-                )
+                    "response":
+                        result.get(
+                            "result",
+                            "YouTube completed"
+                        )
+                }
 
-                await asyncio.sleep(5)
+            # ==================================================
+            # GOOGLE / BROWSER
+            # ==================================================
 
-            # PLAY VIDEO
-            if (
-                "play" in text
-                or "first video" in text
+            elif (
+                "google" in text
+                or "browser" in text
+                or "chrome" in text
             ):
 
-                await self.tool_registry.execute_tool(
-                    "click",
-                    x=500,
-                    y=350
+                query = ""
+
+                if "search" in text:
+
+                    query = text.split("search")[-1]
+
+                    query = (
+                        query
+                        .replace("click the first link", "")
+                        .strip()
+                    )
+
+                result = await self.tools.open_google_search(
+                    query
                 )
 
-            return "YouTube automation completed"
+                # CLICK FIRST LINK
+                if "first link" in text:
 
-        # =================================================
-        # GOOGLE
-        # =================================================
+                    import pyautogui
+                    import time
 
-        if (
-            "google" in text
-            or "browser" in text
-            or "chrome" in text
-        ):
+                    time.sleep(5)
 
-            await self.tool_registry.execute_tool(
-                "open_website",
-                site_name="google"
-            )
+                    pyautogui.click(
+                        x=500,
+                        y=320
+                    )
 
-            await asyncio.sleep(5)
+                return {
 
-            if "search" in text:
+                    "success": True,
 
-                query = text.split("search")[-1].strip()
+                    "response":
+                        result.get(
+                            "result",
+                            "Google completed"
+                        )
+                }
 
-                await self.tool_registry.execute_tool(
-                    "click",
-                    x=700,
-                    y=350
+            # ==================================================
+            # GEMINI
+            # ==================================================
+
+            elif "gemini" in text:
+
+                query = ""
+
+                if "search" in text:
+
+                    query = text.split("search")[-1].strip()
+
+                result = await self.tools.open_gemini_search(
+                    query
                 )
 
-                await asyncio.sleep(1)
+                return {
 
-                await self.tool_registry.execute_tool(
-                    "type_text",
-                    text=query
-                )
+                    "success": True,
 
-                await asyncio.sleep(1)
+                    "response":
+                        result.get(
+                            "result",
+                            "Gemini completed"
+                        )
+                }
 
-                await self.tool_registry.execute_tool(
-                    "press_key",
-                    key_name="enter"
-                )
+            # ==================================================
+            # VS CODE
+            # ==================================================
 
-            return "Google automation completed"
+            elif (
+                "vs code" in text
+                or "vscode" in text
+                or "code" in text
+            ):
 
-        # =================================================
-        # GEMINI
-        # =================================================
+                folder_name = "portfolio"
 
-        if "gemini" in text:
-
-            await self.tool_registry.execute_tool(
-                "open_website",
-                site_name="gemini"
-            )
-
-            await asyncio.sleep(5)
-
-            if "search" in text:
-
-                query = text.split("search")[-1].strip()
-
-                await self.tool_registry.execute_tool(
-                    "type_text",
-                    text=query
-                )
-
-                await asyncio.sleep(1)
-
-                await self.tool_registry.execute_tool(
-                    "press_key",
-                    key_name="enter"
-                )
-
-            return "Gemini opened"
-
-        # =================================================
-        # CHATGPT
-        # =================================================
-
-        if (
-            "chatgpt" in text
-            or "chat gpt" in text
-        ):
-
-            await self.tool_registry.execute_tool(
-                "open_website",
-                site_name="chatgpt"
-            )
-
-            return "ChatGPT opened"
-
-        # =================================================
-        # VS CODE
-        # =================================================
-
-        if (
-            "vs code" in text
-            or "vscode" in text
-            or "code" in text
-        ):
-
-            await self.tool_registry.execute_tool(
-                "launch_app",
-                app_name="code"
-            )
-
-            await asyncio.sleep(5)
-
-            # CREATE FOLDER
-            if "folder" in text:
-
-                folder_name = "NewFolder"
-
-                if "portfolio" in text:
-                    folder_name = "portfolio"
-
-                elif "dashboard" in text:
+                if "dashboard" in text:
                     folder_name = "dashboard"
 
                 elif "jarvis" in text:
                     folder_name = "jarvis"
 
-                # CTRL SHIFT P
-                await self.tool_registry.execute_tool(
-                    "press_hotkey",
-                    "ctrl",
-                    "shift",
-                    "p"
+                elif "project" in text:
+                    folder_name = "project"
+
+                result = await self.tools.open_vscode_create_folder(
+                    folder_name
                 )
 
-                await asyncio.sleep(2)
+                return {
 
-                # OPEN FOLDER
-                await self.tool_registry.execute_tool(
-                    "type_text",
-                    text="File: Open Folder"
-                )
+                    "success": True,
 
-                await asyncio.sleep(1)
+                    "response":
+                        result.get(
+                            "result",
+                            "VS Code completed"
+                        )
+                }
 
-                await self.tool_registry.execute_tool(
-                    "press_key",
-                    key_name="enter"
-                )
+            # ==================================================
+            # OPEN BROWSER
+            # ==================================================
 
-                await asyncio.sleep(3)
+            elif "open browser" in text:
 
-                # PATH
-                await self.tool_registry.execute_tool(
-                    "type_text",
-                    text=f"D:\\{folder_name}"
-                )
+                result = await self.tools.open_browser()
 
-                await asyncio.sleep(1)
+                return {
 
-                await self.tool_registry.execute_tool(
-                    "press_key",
-                    key_name="enter"
-                )
+                    "success": True,
 
-                await asyncio.sleep(3)
+                    "response":
+                        result.get(
+                            "result",
+                            "Browser opened"
+                        )
+                }
 
-                # EXPLORER
-                await self.tool_registry.execute_tool(
-                    "press_hotkey",
-                    "ctrl",
-                    "shift",
-                    "e"
-                )
+            # ==================================================
+            # DEFAULT
+            # ==================================================
 
-                await asyncio.sleep(2)
+            else:
 
-                # NEW FOLDER
-                await self.tool_registry.execute_tool(
-                    "press_hotkey",
-                    "ctrl",
-                    "shift",
-                    "n"
-                )
+                return {
 
-                await asyncio.sleep(1)
+                    "success": False,
 
-                await self.tool_registry.execute_tool(
-                    "type_text",
-                    text=folder_name
-                )
+                    "response":
+                        "Command not understood"
+                }
 
-                await asyncio.sleep(1)
+        except Exception as e:
 
-                await self.tool_registry.execute_tool(
-                    "press_key",
-                    key_name="enter"
-                )
+            print(f"❌ ERROR: {e}")
 
-                return f"{folder_name} folder created"
+            return {
 
-            return "VS Code opened"
+                "success": False,
 
-        # =================================================
-        # CREATE FOLDER
-        # =================================================
-
-        if "create folder" in text:
-
-            folder_name = "NewFolder"
-
-            if "portfolio" in text:
-                folder_name = "portfolio"
-
-            await self.tool_registry.execute_tool(
-                "create_folder",
-                folder_path=folder_name
-            )
-
-            return f"Folder created: {folder_name}"
-
-        # =================================================
-        # DEFAULT
-        # =================================================
-
-        return "No matching automation found"
+                "response": str(e)
+            }
 
 
-# =========================================================
-# GLOBAL AGENT
-# =========================================================
+# ==========================================================
+# GLOBAL INSTANCE
+# ==========================================================
 
-_agent = None
+agent = EnhancedAutonomousAgent()
 
-def get_autonomous_agent():
 
-    global _agent
+# ==========================================================
+# MAIN FUNCTION
+# ==========================================================
 
-    if _agent is None:
+async def execute_autonomous_task(task):
 
-        _agent = EnhancedAutonomousAgent()
-
-    return _agent
+    return await agent.execute_task(task)

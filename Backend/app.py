@@ -1,41 +1,18 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import asyncio
-import logging
 
 from autonomous_agent_enhanced import (
-    EnhancedAutonomousAgent
+    execute_autonomous_task
 )
-
-# ======================================================
-# LOGGING
-# ======================================================
-
-logging.basicConfig(level=logging.INFO)
-
-logger = logging.getLogger(__name__)
-
-# ======================================================
-# FLASK
-# ======================================================
 
 app = Flask(__name__)
 
 CORS(app)
 
-# ======================================================
-# AGENT
-# ======================================================
-
-print("STARTING JARVIS...")
-
-autonomous_agent = EnhancedAutonomousAgent()
-
-print("JARVIS READY")
-
-# ======================================================
+# =====================================================
 # HEALTH
-# ======================================================
+# =====================================================
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -44,22 +21,18 @@ def health():
 
         "success": True,
 
-        "status": "healthy",
-
-        "message": "Jarvis backend running"
+        "status": "healthy"
     })
 
-# ======================================================
-# COMMAND API
-# ======================================================
+# =====================================================
+# AUTONOMOUS EXECUTION
+# =====================================================
 
 @app.route(
-
     "/api/autonomous/execute",
-
     methods=["POST"]
 )
-def execute_autonomous():
+def autonomous_execute():
 
     try:
 
@@ -67,87 +40,51 @@ def execute_autonomous():
 
         task = data.get("task", "")
 
-        if not task:
+        print(f"🔥 TASK: {task}")
 
-            return jsonify({
-
-                "success": False,
-
-                "error": "No task provided"
-            })
-
-        logger.info("=" * 60)
-        logger.info(f"TASK: {task}")
-        logger.info("=" * 60)
-
-        # ==============================================
-        # RUN AGENT
-        # ==============================================
-
+        # RUN ASYNC
         result = asyncio.run(
-
-            autonomous_agent.execute_autonomous_task(
-                task
-            )
+            execute_autonomous_task(task)
         )
 
-        logger.info(f"RESULT: {result}")
+        print("✅ RESULT:", result)
 
-        return jsonify(result)
+        # ALWAYS RETURN VALID FORMAT
+        return jsonify({
+
+            "success":
+                result.get(
+                    "success",
+                    True
+                ),
+
+            "response":
+                result.get(
+                    "response",
+                    "Task completed"
+                ),
+
+            "result": result
+        })
 
     except Exception as e:
 
-        logger.error(str(e))
+        print("❌ ERROR:", str(e))
 
         return jsonify({
 
             "success": False,
 
-            "status": "failed",
-
-            "error": str(e)
+            "response": str(e)
         })
 
-# ======================================================
-# OLD COMMAND ROUTE
-# ======================================================
-
-@app.route("/command", methods=["POST"])
-def command():
-
-    try:
-
-        data = request.json
-
-        task = data.get("command", "")
-
-        result = asyncio.run(
-
-            autonomous_agent.execute_autonomous_task(
-                task
-            )
-        )
-
-        return jsonify(result)
-
-    except Exception as e:
-
-        return jsonify({
-
-            "success": False,
-
-            "error": str(e)
-        })
-
-# ======================================================
+# =====================================================
 # MAIN
-# ======================================================
+# =====================================================
 
 if __name__ == "__main__":
 
-    print("\n========================")
-    print("JARVIS BACKEND STARTED")
-    print("========================\n")
+    print("🔥 JARVIS BACKEND STARTED")
 
     app.run(
 

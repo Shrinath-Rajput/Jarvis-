@@ -1,415 +1,525 @@
-"""
-Advanced Execution Engine
-Executes planned actions with error handling and monitoring
-"""
+# ============================================
+# FINAL FULL WORKING executor.py
+# ============================================
+
 import logging
-import json
 import traceback
+import pyautogui
+import webbrowser
+import time
+
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict
 
-from browser_control import get_browser, close_browser
+from browser_control import get_browser
 from computer_control import ComputerControl
-from config import DEBUG, MAX_RETRIES, TIMEOUT_SECONDS
+from config import DEBUG
 
-logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
+from screen_ai import click_text
+
+logging.basicConfig(
+    level=logging.DEBUG if DEBUG else logging.INFO
+)
+
 logger = logging.getLogger(__name__)
 
-# ========================
-# ACTION EXECUTION RESULTS
-# ========================
+pyautogui.FAILSAFE = False
+pyautogui.PAUSE = 1.5
+
+
+# ============================================
+# RESULT
+# ============================================
 
 class ExecutionResult:
-    """Store execution result for an action"""
-    
-    def __init__(self, action, success, output, error=None):
+
+    def __init__(
+
+        self,
+
+        action,
+
+        success,
+
+        output=None,
+
+        error=None
+    ):
+
         self.action = action
+
         self.success = success
+
         self.output = output
+
         self.error = error
+
         self.timestamp = datetime.now()
-    
+
     def to_dict(self):
+
         return {
-            'action': self.action,
-            'success': self.success,
-            'output': self.output,
-            'error': self.error,
-            'timestamp': self.timestamp.isoformat()
+
+            "action":
+                self.action,
+
+            "success":
+                self.success,
+
+            "output":
+                self.output,
+
+            "error":
+                self.error,
+
+            "timestamp":
+                self.timestamp.isoformat()
         }
 
 
-# ========================
+# ============================================
 # EXECUTION ENGINE
-# ========================
+# ============================================
 
 class ExecutionEngine:
-    """
-    Executes planned actions with monitoring and error handling
-    """
-    
+
     def __init__(self):
+
         self.browser = get_browser()
+
         self.computer = ComputerControl()
+
         self.results = []
-        self.state = {
-            'current_url': None,
-            'page_title': None,
-            'last_text_extracted': None,
-        }
-        logger.info("ExecutionEngine initialized")
-    
-    def execute_plan(self, plan: List[Dict]) -> List[ExecutionResult]:
-        """
-        Execute a complete action plan
-        
-        Args:
-            plan: List of actions to execute
-            
-        Returns:
-            List of execution results
-        """
+
+        logger.info(
+            "🔥 FINAL EXECUTION ENGINE READY"
+        )
+
+    # ========================================
+    # EXECUTE PLAN
+    # ========================================
+
+    def execute_plan(
+
+        self,
+
+        plan: List[Dict]
+    ):
+
         self.results = []
-        
-        if not plan:
-            logger.warning("Empty plan provided")
-            return []
-        
-        logger.info(f"Starting execution of plan with {len(plan)} actions")
-        
-        for i, action in enumerate(plan):
-            logger.info(f"\n--- Action {i+1}/{len(plan)} ---")
-            logger.info(f"Action: {action}")
-            
-            result = self.execute_action(action)
+
+        for action in plan:
+
+            result = self.execute_action(
+                action
+            )
+
             self.results.append(result)
-            
-            # Stop on critical errors
-            if not result.success and 'critical' in result.error.lower():
-                logger.error(f"Critical error, stopping execution: {result.error}")
-                break
-        
-        logger.info(f"\nExecution complete. Results: {len(self.results)}")
+
         return self.results
-    
-    def execute_action(self, action: Dict) -> ExecutionResult:
-        """
-        Execute a single action with error handling
-        
-        Args:
-            action: Action to execute
-            
-        Returns:
-            ExecutionResult
-        """
+
+    # ========================================
+    # EXECUTE SINGLE ACTION
+    # ========================================
+
+    def execute_action(
+
+        self,
+
+        action: Dict
+    ):
+
         try:
-            tool = action.get('tool', '').lower()
-            params = action.get('params', {})
-            
-            logger.debug(f"Executing: {tool} with params: {params}")
-            
-            # ========================
-            # BROWSER NAVIGATION
-            # ========================
-            
-            if tool == 'navigate_to' or tool == 'navigate':
-                url = params.get('url') or params.get('site', '')
-                if not self.browser.is_open:
-                    self.browser.launch()
-                
-                success = self.browser.navigate(url)
-                output = self.browser.get_current_url() if success else None
-                self.state['current_url'] = output
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    f"Navigated to {output}" if success else None,
-                    "Failed to navigate" if not success else None
+
+            tool = action.get(
+                "tool",
+                ""
+            ).lower()
+
+            params = action.get(
+                "params",
+                {}
+            )
+
+            logger.info(
+                f"RUNNING TOOL: {tool}"
+            )
+
+            # ====================================
+            # OPEN WEBSITE
+            # ====================================
+
+            if tool in [
+
+                "open_website",
+
+                "navigate",
+
+                "open_url"
+            ]:
+
+                url = params.get(
+                    "url",
+                    "https://google.com"
                 )
-            
-            # ========================
-            # WAIT ACTIONS
-            # ========================
-            
-            elif tool == 'wait' or tool == 'wait_seconds':
-                seconds = int(params.get('seconds', 1))
-                self.browser.wait(seconds)
+
+                webbrowser.open(url)
+
+                time.sleep(6)
+
                 return ExecutionResult(
+
                     action,
+
                     True,
-                    f"Waited {seconds} seconds"
+
+                    f"Opened {url}"
                 )
-            
-            elif tool == 'wait_for':
-                selector = params.get('selector') or params.get('element', '')
-                timeout = int(params.get('timeout', 10000))
-                success = self.browser.wait_for_element(selector, timeout)
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    f"Element appeared: {selector}" if success else None,
-                    f"Element not found: {selector}" if not success else None
+
+            # ====================================
+            # SEARCH GOOGLE
+            # ====================================
+
+            elif tool in [
+
+                "search_google",
+
+                "google_search"
+            ]:
+
+                query = params.get(
+                    "query",
+                    ""
                 )
-            
-            elif tool == 'wait_for_text':
-                text = params.get('text', '')
-                timeout = int(params.get('timeout', 10000))
-                success = self.browser.wait_for_text(text, timeout)
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    f"Text appeared: {text}" if success else None,
-                    f"Text not found: {text}" if not success else None
+
+                url = (
+
+                    "https://www.google.com/search?q="
+                    + query
                 )
-            
-            # ========================
-            # CLICK ACTIONS
-            # ========================
-            
-            elif tool == 'click':
-                selector = params.get('selector') or params.get('element', '')
-                success = self.browser.click(selector)
-                
+
+                webbrowser.open(url)
+
+                time.sleep(6)
+
+                pyautogui.press("tab")
+
+                time.sleep(1)
+
+                pyautogui.press("enter")
+
                 return ExecutionResult(
+
                     action,
-                    success,
-                    f"Clicked: {selector}" if success else None,
-                    f"Failed to click: {selector}" if not success else None
-                )
-            
-            elif tool == 'click_text':
-                text = params.get('text', '')
-                success = self.browser.click_text(text)
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    f"Clicked text: {text}" if success else None,
-                    f"Failed to click text: {text}" if not success else None
-                )
-            
-            # ========================
-            # TYPE ACTIONS
-            # ========================
-            
-            elif tool == 'type' or tool == 'type_text':
-                selector = params.get('selector') or params.get('element', '')
-                text = params.get('text', '')
-                delay = int(params.get('delay', 0))
-                
-                success = self.browser.type_text(selector, text, delay)
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    f"Typed into {selector}" if success else None,
-                    f"Failed to type: {selector}" if not success else None
-                )
-            
-            elif tool == 'fill_field':
-                label = params.get('label', '')
-                text = params.get('text', '')
-                success = self.browser.find_and_type(label, text)
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    f"Filled field: {label}" if success else None,
-                    f"Failed to fill field: {label}" if not success else None
-                )
-            
-            # ========================
-            # FORM ACTIONS
-            # ========================
-            
-            elif tool == 'submit_form':
-                selector = params.get('selector', 'form')
-                success = self.browser.submit_form(selector)
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    "Form submitted" if success else None,
-                    "Failed to submit form" if not success else None
-                )
-            
-            elif tool == 'select_dropdown':
-                selector = params.get('selector', '')
-                value = params.get('value', '')
-                success = self.browser.select_dropdown(selector, value)
-                
-                return ExecutionResult(
-                    action,
-                    success,
-                    f"Selected {value}" if success else None,
-                    f"Failed to select {value}" if not success else None
-                )
-            
-            # ========================
-            # DATA EXTRACTION
-            # ========================
-            
-            elif tool == 'extract_text':
-                selector = params.get('selector', '')
-                text = self.browser.get_text(selector)
-                
-                return ExecutionResult(
-                    action,
-                    text is not None,
-                    text if text else None,
-                    "Failed to extract text" if text is None else None
-                )
-            
-            elif tool == 'extract_links':
-                links = self.browser.extract_links()
-                
-                return ExecutionResult(
-                    action,
+
                     True,
-                    f"Extracted {len(links)} links",
-                    None
+
+                    f"Searched Google: {query}"
                 )
-            
-            elif tool == 'screenshot':
-                name = params.get('name', '')
-                path = self.browser.screenshot(name)
-                
-                return ExecutionResult(
-                    action,
-                    path is not None,
-                    f"Screenshot: {path}" if path else None,
-                    "Failed to take screenshot" if path is None else None
+
+            # ====================================
+            # YOUTUBE SEARCH
+            # ====================================
+
+            elif tool in [
+
+                "search_youtube",
+
+                "youtube_search"
+            ]:
+
+                query = params.get(
+                    "query",
+                    ""
                 )
-            
-            # ========================
-            # NAVIGATION
-            # ========================
-            
-            elif tool == 'go_back':
-                success = self.browser.go_back()
+
+                url = (
+
+                    "https://www.youtube.com/results?search_query="
+                    + query
+                )
+
+                webbrowser.open(url)
+
+                time.sleep(7)
+
+                pyautogui.press("tab")
+
+                time.sleep(1)
+
+                pyautogui.press("enter")
+
                 return ExecutionResult(
+
                     action,
+
+                    True,
+
+                    f"YouTube search: {query}"
+                )
+
+            # ====================================
+            # CLICK
+            # ====================================
+
+            elif tool == "click":
+
+                text = params.get(
+                    "text",
+                    ""
+                )
+
+                x = params.get("x")
+
+                y = params.get("y")
+
+                success = False
+
+                # OCR CLICK
+                if text:
+
+                    success = click_text(text)
+
+                # COORDINATE CLICK
+                elif x is not None and y is not None:
+
+                    pyautogui.click(x, y)
+
+                    success = True
+
+                return ExecutionResult(
+
+                    action,
+
                     success,
-                    "Went back" if success else None,
-                    "Failed to go back" if not success else None
+
+                    f"Clicked {text or (x,y)}",
+
+                    None if success else "Click failed"
                 )
-            
-            elif tool == 'refresh':
-                success = self.browser.refresh()
+
+            # ====================================
+            # TYPE
+            # ====================================
+
+            elif tool in [
+
+                "type",
+
+                "type_text"
+            ]:
+
+                text = params.get(
+                    "text",
+                    ""
+                )
+
+                pyautogui.write(
+
+                    text,
+
+                    interval=0.03
+                )
+
                 return ExecutionResult(
+
                     action,
-                    success,
-                    "Page refreshed" if success else None,
-                    "Failed to refresh" if not success else None
+
+                    True,
+
+                    f"Typed: {text}"
                 )
-            
-            # ========================
-            # SYSTEM ACTIONS
-            # ========================
-            
-            elif tool == 'open_app':
-                app = params.get('app', '')
-                success = self.computer.open_application(app)
+
+            # ====================================
+            # PRESS KEY
+            # ====================================
+
+            elif tool == "press_key":
+
+                key = params.get(
+                    "key",
+                    "enter"
+                )
+
+                pyautogui.press(key)
+
                 return ExecutionResult(
+
                     action,
-                    success,
-                    f"Opened {app}" if success else None,
-                    f"Failed to open {app}" if not success else None
+
+                    True,
+
+                    f"Pressed {key}"
                 )
-            
-            elif tool == 'open_website':
-                site = params.get('site', '')
-                if not self.browser.is_open:
-                    self.browser.launch()
-                success = self.browser.navigate(site)
+
+            # ====================================
+            # HOTKEY
+            # ====================================
+
+            elif tool == "hotkey":
+
+                keys = params.get(
+                    "keys",
+                    []
+                )
+
+                pyautogui.hotkey(*keys)
+
                 return ExecutionResult(
+
                     action,
-                    success,
-                    f"Opened {site}" if success else None,
-                    f"Failed to open {site}" if not success else None
+
+                    True,
+
+                    f"Hotkey: {keys}"
                 )
-            
-            # ========================
-            # UNKNOWN ACTION
-            # ========================
-            
+
+            # ====================================
+            # OPEN VS CODE
+            # ====================================
+
+            elif tool == "open_vscode":
+
+                import subprocess
+
+                subprocess.Popen("code")
+
+                time.sleep(8)
+
+                return ExecutionResult(
+
+                    action,
+
+                    True,
+
+                    "VS Code opened"
+                )
+
+            # ====================================
+            # CREATE FOLDER
+            # ====================================
+
+            elif tool == "create_folder":
+
+                import os
+
+                folder = params.get(
+                    "name",
+                    "NewFolder"
+                )
+
+                desktop = os.path.join(
+
+                    os.path.expanduser("~"),
+
+                    "Desktop"
+                )
+
+                path = os.path.join(
+                    desktop,
+                    folder
+                )
+
+                os.makedirs(
+
+                    path,
+
+                    exist_ok=True
+                )
+
+                return ExecutionResult(
+
+                    action,
+
+                    True,
+
+                    f"Folder created: {folder}"
+                )
+
+            # ====================================
+            # WAIT
+            # ====================================
+
+            elif tool == "wait":
+
+                seconds = int(
+
+                    params.get(
+                        "seconds",
+                        2
+                    )
+                )
+
+                time.sleep(seconds)
+
+                return ExecutionResult(
+
+                    action,
+
+                    True,
+
+                    f"Waited {seconds}s"
+                )
+
+            # ====================================
+            # DEFAULT
+            # ====================================
+
             else:
-                logger.warning(f"Unknown tool: {tool}")
+
                 return ExecutionResult(
+
                     action,
+
                     False,
+
                     None,
+
                     f"Unknown tool: {tool}"
                 )
-        
+
         except Exception as e:
-            logger.error(f"Execution error: {str(e)}")
-            logger.error(traceback.format_exc())
-            
+
+            logger.error(str(e))
+
+            traceback.print_exc()
+
             return ExecutionResult(
+
                 action,
+
                 False,
+
                 None,
-                f"Exception: {str(e)}"
+
+                str(e)
             )
-    
-    def get_results_summary(self) -> Dict[str, Any]:
-        """Get summary of execution results"""
-        successful = sum(1 for r in self.results if r.success)
-        failed = len(self.results) - successful
-        
-        return {
-            'total_actions': len(self.results),
-            'successful': successful,
-            'failed': failed,
-            'success_rate': (successful / len(self.results) * 100) if self.results else 0,
-            'results': [r.to_dict() for r in self.results]
-        }
-    
-    def cleanup(self):
-        """Clean up resources"""
-        try:
-            close_browser()
-            self.computer.cleanup()
-            logger.info("Execution engine cleaned up")
-        except Exception as e:
-            logger.error(f"Cleanup error: {str(e)}")
+
+    # ========================================
+    # GET RESULTS
+    # ========================================
+
+    def get_results(self):
+
+        return [
+
+            r.to_dict()
+
+            for r in self.results
+        ]
 
 
-# ========================
-# GLOBAL INSTANCE
-# ========================
+# ============================================
+# GLOBAL ENGINE
+# ============================================
 
-_executor = None
+engine = ExecutionEngine()
 
-def get_executor():
-    """Get global executor"""
-    global _executor
-    if _executor is None:
-        _executor = ExecutionEngine()
-    return _executor
+
+# ============================================
+# HELPER
+# ============================================
 
 def execute_plan(plan):
-    """Quick execute function"""
-    return get_executor().execute_plan(plan)
 
-if __name__ == "__main__":
-    print("Testing Execution Engine...")
-    
-    test_plan = [
-        {"tool": "navigate", "params": {"url": "https://google.com"}},
-        {"tool": "wait", "params": {"seconds": 2}},
-        {"tool": "screenshot", "params": {"name": "google"}},
-    ]
-    
-    executor = get_executor()
-    results = executor.execute_plan(test_plan)
-    
-    print("\nExecution Results:")
-    print(json.dumps(executor.get_results_summary(), indent=2))
-    
-    executor.cleanup()
-    print("\n✅ Executor test complete")
+    return engine.execute_plan(plan)
