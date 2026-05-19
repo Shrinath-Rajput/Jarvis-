@@ -49,6 +49,8 @@ async def launch_application(app_name: str, arguments: str = "") -> Dict[str, An
         "word": "start winword {args}",
         "excel": "start excel {args}",
         "powerpoint": "start powerpnt {args}",
+        "youtube": "start https://www.youtube.com",
+        "google": "start https://www.google.com",
     }
     
     app_lower = app_name.lower()
@@ -60,20 +62,31 @@ async def launch_application(app_name: str, arguments: str = "") -> Dict[str, An
         }
     
     try:
-        command = app_commands[app_lower].format(args=arguments)
-        os.system(command)
-        logger.info(f"✅ Launched {app_name}")
-        time.sleep(1)  # Give app time to start
+        command = app_commands[app_lower].format(args=arguments.strip() if arguments else "")
+        logger.info(f"🚀 [LAUNCH] Executing command: {command}")
+        
+        # Use subprocess for better error handling
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            error_output = result.stderr or result.stdout
+            logger.warning(f"⚠️ [LAUNCH] Command returned exit code {result.returncode}: {error_output}")
+        
+        logger.info(f"✅ [LAUNCH] Launched {app_name}")
+        time.sleep(2)  # Give app time to start
         
         return {
             "success": True,
             "message": f"Launched {app_name}",
-            "app": app_name
+            "app": app_name,
+            "command": command
         }
     except Exception as e:
+        error_msg = f"Failed to launch {app_name}: {str(e)}"
+        logger.error(f"❌ [LAUNCH] {error_msg}")
         return {
             "success": False,
-            "error": f"Failed to launch {app_name}: {str(e)}"
+            "error": error_msg
         }
 
 
@@ -137,19 +150,32 @@ async def open_website(site_name: str, url: str = "") -> Dict[str, Any]:
         }
     
     try:
-        webbrowser.open(target_url)
-        logger.info(f"✅ Opened {target_url}")
-        time.sleep(1)
+        logger.info(f"🌐 [OPEN_WEBSITE] Opening: {target_url}")
+        
+        # Try webbrowser first
+        try:
+            webbrowser.open(target_url)
+            logger.info(f"✅ [OPEN_WEBSITE] Opened with webbrowser")
+        except Exception as web_error:
+            logger.warning(f"⚠️ [OPEN_WEBSITE] Webbrowser failed, trying start command: {web_error}")
+            # Fallback to start command for Windows
+            subprocess.run(f"start {target_url}", shell=True)
+            logger.info(f"✅ [OPEN_WEBSITE] Opened with start command")
+        
+        time.sleep(2)
         
         return {
             "success": True,
             "message": f"Opened {target_url}",
-            "url": target_url
+            "url": target_url,
+            "site_name": site_name
         }
     except Exception as e:
+        error_msg = f"Failed to open website: {str(e)}"
+        logger.error(f"❌ [OPEN_WEBSITE] {error_msg}")
         return {
             "success": False,
-            "error": str(e)
+            "error": error_msg
         }
 
 
@@ -196,20 +222,30 @@ async def search_google(query: str) -> Dict[str, Any]:
     search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
     
     try:
-        webbrowser.open(search_url)
-        logger.info(f"✅ Searched Google for '{query}'")
-        time.sleep(1)
+        logger.info(f"🔍 [SEARCH_GOOGLE] Searching for: {query}")
+        
+        try:
+            webbrowser.open(search_url)
+            logger.info(f"✅ [SEARCH_GOOGLE] Opened with webbrowser")
+        except Exception as web_error:
+            logger.warning(f"⚠️ [SEARCH_GOOGLE] Webbrowser failed, trying start command: {web_error}")
+            subprocess.run(f"start {search_url}", shell=True)
+            logger.info(f"✅ [SEARCH_GOOGLE] Opened with start command")
+        
+        time.sleep(2)
         
         return {
             "success": True,
-            "message": f"Searched for '{query}'",
+            "message": f"Searched Google for '{query}'",
             "query": query,
             "url": search_url
         }
     except Exception as e:
+        error_msg = f"Failed to search Google: {str(e)}"
+        logger.error(f"❌ [SEARCH_GOOGLE] {error_msg}")
         return {
             "success": False,
-            "error": str(e)
+            "error": error_msg
         }
 
 
@@ -226,9 +262,17 @@ async def search_youtube(query: str) -> Dict[str, Any]:
     search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
     
     try:
-        webbrowser.open(search_url)
-        logger.info(f"✅ Searched YouTube for '{query}'")
-        time.sleep(1)
+        logger.info(f"🎥 [SEARCH_YOUTUBE] Searching for: {query}")
+        
+        try:
+            webbrowser.open(search_url)
+            logger.info(f"✅ [SEARCH_YOUTUBE] Opened with webbrowser")
+        except Exception as web_error:
+            logger.warning(f"⚠️ [SEARCH_YOUTUBE] Webbrowser failed, trying start command: {web_error}")
+            subprocess.run(f"start {search_url}", shell=True)
+            logger.info(f"✅ [SEARCH_YOUTUBE] Opened with start command")
+        
+        time.sleep(2)
         
         return {
             "success": True,
@@ -237,9 +281,11 @@ async def search_youtube(query: str) -> Dict[str, Any]:
             "url": search_url
         }
     except Exception as e:
+        error_msg = f"Failed to search YouTube: {str(e)}"
+        logger.error(f"❌ [SEARCH_YOUTUBE] {error_msg}")
         return {
             "success": False,
-            "error": str(e)
+            "error": error_msg
         }
 
 

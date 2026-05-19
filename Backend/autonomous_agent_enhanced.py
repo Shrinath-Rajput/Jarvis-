@@ -125,41 +125,59 @@ class EnhancedAutonomousAgent:
                 
                 logger.info(f"\n{'─'*70}")
                 logger.info(f"STEP {step_num}/{self.max_steps_per_task}")
+                logger.info(f"Task: {task.user_intent}")
                 logger.info(f"{'─'*70}")
                 
                 # STEP 1: PERCEIVE - Analyze screen
+                logger.info("📷 [PERCEIVE] Analyzing screen...")
                 if not await self._perceive(task):
                     logger.error("❌ Perception failed")
                     task.fail("Perception system error")
                     break
                 
                 # STEP 2: ANALYZE - Check completion and errors
+                logger.info("🔍 [ANALYZE] Checking task progress...")
                 analysis = await self._analyze(task)
                 if analysis['task_complete']:
-                    logger.info("✅ Task completion detected!")
+                    logger.info("✅ [ANALYZE] Task completion detected!")
                     task.complete()
                     break
                 
                 if analysis['task_failed']:
-                    logger.error(f"❌ Task failure detected: {analysis.get('reason')}")
+                    logger.error(f"❌ [ANALYZE] Task failure detected: {analysis.get('reason')}")
                     task.fail(analysis.get('reason', 'Task analysis indicated failure'))
                     break
                 
                 # STEP 3: PLAN - Use LLM to decide next action
+                logger.info("🧠 [PLAN] Creating action plan...")
                 action_plan = await self._plan(task, analysis)
+                
                 if not action_plan:
-                    logger.warning("⚠️ No action planned, task may be complete")
-                    task.complete()
+                    logger.error("❌ [PLAN] No valid action plan could be created!")
+                    logger.error(f"   Task: {task.user_intent}")
+                    logger.error(f"   Step: {task.step_count}")
+                    logger.error(f"   Marking task as FAILED")
+                    task.fail("Could not create valid action plan")
                     break
                 
-                logger.info(f"📋 PLANNED ACTION:")
-                logger.info(f"   Tool: {action_plan.get('tool')}")
-                logger.info(f"   Reason: {action_plan.get('reasoning')}")
+                logger.info(f"✅ [PLAN] Action plan created:")
+                logger.info(f"   🔧 Tool: {action_plan.get('tool')}")
+                logger.info(f"   📌 Params: {action_plan.get('parameters', {})}")
+                logger.info(f"   💭 Reason: {action_plan.get('reasoning')}")
                 
                 # STEP 4: ACT - Execute the planned action
+                logger.info(f"🎬 [ACT] Executing tool: {action_plan.get('tool')}")
                 action_result = await self._act(task, action_plan)
+                
+                logger.info(f"📊 [ACT] Execution result:")
+                logger.info(f"   Success: {action_result.get('success')}")
+                if action_result.get('result'):
+                    logger.info(f"   Result: {action_result.get('result')}")
+                if action_result.get('error'):
+                    logger.info(f"   Error: {action_result.get('error')}")
+                
                 if not action_result['success']:
-                    logger.warning(f"⚠️ Action failed: {action_result.get('error')}")
+                    logger.warning(f"⚠️ [ACT] Action failed: {action_result.get('error')}")
                     task.execution_errors += 1
                     
                     if not task.should_retry():
@@ -169,16 +187,23 @@ class EnhancedAutonomousAgent:
                     
                     logger.info("🔄 Will retry on next step")
                     continue
-                
-                logger.info(f"✅ Action succeeded")
+                else:
+                    logger.info(f"✅ [ACT] Tool executed successfully")
+                    continue
                 
                 # STEP 5: LEARN - Update our knowledge
+                logger.info("📚 [LEARN] Updating knowledge...")
                 await self._learn(task, action_plan, action_result)
                 
                 # Increment step counter
                 task.increment_step()
+                logger.info(f"✅ Step {step_num} completed. Actions so far: {len(task.action_history)}")
             
-            # Task completed
+            # Task completed or max steps reached
+            if task.step_count >= self.max_steps_per_task:
+                logger.warning(f"⚠️ Reached max steps ({self.max_steps_per_task})")
+                task.complete()
+            
             summary = task.get_execution_summary()
             
             logger.info("\n" + "="*70)
@@ -186,8 +211,10 @@ class EnhancedAutonomousAgent:
             logger.info("="*70)
             logger.info(f"Status: {task.status.value}")
             logger.info(f"Total steps: {task.step_count}")
+            logger.info(f"Actions taken: {len(task.action_history)}")
             logger.info(f"Success rate: {summary['actions_successful']}/{summary['total_actions']}")
             logger.info(f"Errors: {task.execution_errors}")
+            logger.info(f"Duration: {summary['duration_seconds']:.2f}s")
             logger.info("="*70 + "\n")
             
             return summary
@@ -256,6 +283,12 @@ class EnhancedAutonomousAgent:
         }
         
         try:
+            # ⚠️ CRITICAL FIX: Don't check for completion on first step
+            # The agent must take at least ONE action before completion can be declared
+            if task.step_count == 0:
+                logger.info("   ℹ️ First step - skipping completion check until actions are taken")
+                return analysis
+            
             # Check if screen indicates task completion
             text_on_screen = self.vision_context.text_on_screen.lower()
             
@@ -287,7 +320,8 @@ class EnhancedAutonomousAgent:
                         break
             
             # Use LLM to analyze current state against task intent
-            if not analysis['task_complete'] and not analysis['task_failed']:
+            # Only after at least 1 action has been taken
+            if not analysis['task_complete'] and not analysis['task_failed'] and task.step_count >= 1:
                 llm_analysis = await self._llm_analyze_state(task)
                 if llm_analysis:
                     analysis.update(llm_analysis)
@@ -319,28 +353,31 @@ You are an autonomous AI agent controlling a computer to complete tasks.
 CURRENT TASK:
 {task.user_intent}
 
-PROGRESS: {task.step_count} steps taken
+PROGRESS: {task.step_count} steps taken, {task.execution_errors} errors
 
 CURRENT SCREEN STATE:
 {json.dumps(self.vision_context.to_dict(), indent=2)}
 
-VISIBLE TEXT:
-{self.vision_context.text_on_screen[:300]}
+VISIBLE TEXT ON SCREEN:
+{self.vision_context.text_on_screen[:300] if self.vision_context.text_on_screen else "No text detected"}
 
 AVAILABLE TOOLS:
 {tools_available}
 
 PREVIOUS ACTIONS:
-{json.dumps([a['tool'] for a in self.action_history[-3:]], indent=2)}
+{json.dumps([a['tool'] for a in self.action_history[-5:]], indent=2) if self.action_history else "None yet"}
 
-YOUR JOB:
-Based on the current screen and task, decide the NEXT SINGLE ACTION to take.
-Choose from the available tools above. Be specific and practical.
+INSTRUCTIONS:
+1. You MUST choose a concrete action to take RIGHT NOW
+2. Look at the current screen and understand what's visible
+3. Compare to what the task requires
+4. Choose the NEXT LOGICAL STEP from available tools
+5. Only return "complete" if task is VISIBLY finished on screen
+6. Be SPECIFIC with parameters (e.g., exact URL, search term, etc.)
 
-If the task appears to be complete, respond with: {{"tool": "complete", "reasoning": "reason"}}
-If the task appears impossible, respond with: {{"tool": "failed", "reasoning": "reason"}}
-
-Otherwise, respond with a JSON object containing:
+If task is visibly complete, respond with: {{"tool": "complete", "reasoning": "reason"}}
+If task is impossible, respond with: {{"tool": "failed", "reasoning": "reason"}}
+Otherwise, respond with ONLY valid JSON (no markdown):
 {{
     "tool": "exact_tool_name",
     "parameters": {{"param1": value1, "param2": value2}},
@@ -352,8 +389,9 @@ Otherwise, respond with a JSON object containing:
             response = await self._query_llm(context)
             
             if not response:
-                logger.warning("   ⚠️ LLM returned no response")
-                return None
+                logger.warning("   ⚠️ LLM returned no response, using fallback planning")
+                # Fallback: try to parse task intent directly
+                return self._create_fallback_plan(task)
             
             # Parse response
             try:
@@ -363,7 +401,8 @@ Otherwise, respond with a JSON object containing:
                 # Try to extract JSON from response
                 action = self._extract_json_from_text(response)
                 if not action:
-                    return None
+                    logger.warning("   ⚠️ No JSON found, using fallback planning")
+                    return self._create_fallback_plan(task)
             
             # Handle completion signals
             if action.get('tool') == 'complete':
@@ -384,7 +423,8 @@ Otherwise, respond with a JSON object containing:
                     action['tool'] = similar[0].name
                     logger.info(f"   📌 Using similar tool: {action['tool']}")
                 else:
-                    return None
+                    logger.warning("   ⚠️ Similar tool not found, using fallback planning")
+                    return self._create_fallback_plan(task)
             
             logger.info(f"   ✅ Planned action: {action['tool']}")
             return action
@@ -407,11 +447,35 @@ Otherwise, respond with a JSON object containing:
             tool_name = action_plan.get('tool')
             parameters = action_plan.get('parameters', {})
             
-            logger.info(f"   Tool: {tool_name}")
-            logger.info(f"   Params: {parameters}")
+            logger.info(f"   🔧 Tool name: {tool_name}")
+            logger.info(f"   📋 Parameters: {json.dumps(parameters, indent=6)}")
             
-            # Execute tool
+            # Log available tools before execution
+            available_tools = [t.name for t in self.tool_registry.get_all_tools()]
+            logger.info(f"   📦 Available tools: {available_tools}")
+            
+            # Verify tool exists
+            tool = self.tool_registry.get_tool(tool_name)
+            if not tool:
+                error_msg = f"Tool '{tool_name}' not found in registry"
+                logger.error(f"   ❌ {error_msg}")
+                return {
+                    'success': False,
+                    'error': error_msg,
+                    'tool': tool_name
+                }
+            
+            logger.info(f"   ✅ Tool found: {tool_name} (category: {tool.category.value})")
+            
+            # Execute tool with detailed logging
+            logger.info(f"   🚀 EXECUTING TOOL NOW...")
             result = await self.tool_registry.execute_tool(tool_name, **parameters)
+            
+            logger.info(f"   📊 Tool result:")
+            logger.info(f"      Success: {result.get('success')}")
+            logger.info(f"      Result: {result.get('result')}")
+            if result.get('error'):
+                logger.info(f"      Error: {result.get('error')}")
             
             # Record in history
             self.action_history.append({
@@ -419,23 +483,27 @@ Otherwise, respond with a JSON object containing:
                 'tool': tool_name,
                 'parameters': parameters,
                 'success': result['success'],
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'result': result.get('result'),
+                'error': result.get('error')
             })
             
             if result['success']:
-                logger.info(f"   ✅ Action succeeded")
+                logger.info(f"   ✅ ACTION EXECUTED SUCCESSFULLY")
                 self.vision_context.last_action_success = True
             else:
-                logger.warning(f"   ❌ Action failed: {result.get('error')}")
+                logger.warning(f"   ❌ ACTION FAILED: {result.get('error')}")
                 self.vision_context.last_action_success = False
             
             return result
             
         except Exception as e:
-            logger.error(f"   ❌ Execution error: {e}")
+            error_msg = f"Execution error: {str(e)}"
+            logger.error(f"   ❌ {error_msg}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e)
+                'error': error_msg,
+                'exception': type(e).__name__
             }
     
     async def _learn(self, task: TaskState, action_plan: Dict, result: Dict) -> None:
@@ -474,16 +542,36 @@ Otherwise, respond with a JSON object containing:
     async def _llm_analyze_state(self, task: TaskState) -> Dict:
         """Use LLM to analyze if task is complete"""
         try:
+            # Get recent actions taken
+            recent_actions = [a['tool'] for a in self.action_history[-5:]] if self.action_history else []
+            
             analysis_prompt = f"""
-Given this task: {task.user_intent}
-And current screen text: {self.vision_context.text_on_screen[:200]}
+TASK: {task.user_intent}
+ACTIONS TAKEN: {recent_actions if recent_actions else "None yet"}
+STEPS COMPLETED: {task.step_count}
+CURRENT SCREEN TEXT: {self.vision_context.text_on_screen[:300]}
 
-Has the task been completed? Respond with JSON:
+Based on the task, actions taken, and current screen state:
+Has the task been FULLY COMPLETED? 
+
+Consider:
+- For "open YouTube": YouTube page should be visible
+- For "search X": Search results should be visible
+- For "open application": Application window should be visible
+
+Respond with ONLY valid JSON, no markdown, no explanation:
 {{"task_complete": true/false, "reasoning": "brief reason"}}
 """
             response = await self._query_llm(analysis_prompt)
             if response:
-                return json.loads(response)
+                try:
+                    return json.loads(response)
+                except json.JSONDecodeError:
+                    # Try to extract JSON if it has markdown code blocks
+                    import re
+                    json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                    if json_match:
+                        return json.loads(json_match.group())
         except Exception as e:
             logger.error(f"State analysis error: {e}")
         
@@ -503,6 +591,63 @@ Has the task been completed? Respond with JSON:
             if any(keyword in line.lower() for keyword in ['error', 'failed']):
                 return line.strip()
         return "Unknown error"
+    
+    def _create_fallback_plan(self, task: TaskState) -> Optional[Dict[str, Any]]:
+        """
+        Create a fallback plan based on task keywords
+        Used when LLM fails or returns invalid response
+        """
+        intent_lower = task.user_intent.lower()
+        logger.info(f"   📋 Creating fallback plan for: {intent_lower}")
+        
+        # Common website patterns
+        websites = {
+            'youtube': ('open_website', {'site_name': 'youtube'}),
+            'google': ('open_website', {'site_name': 'google'}),
+            'chatgpt': ('open_website', {'site_name': 'chatgpt'}),
+            'gmail': ('open_website', {'site_name': 'gmail'}),
+            'github': ('open_website', {'site_name': 'github'}),
+            'stackoverflow': ('open_website', {'site_name': 'stackoverflow'}),
+        }
+        
+        # Check for website patterns
+        for website_name, (tool_name, params) in websites.items():
+            if website_name in intent_lower:
+                logger.info(f"   ✅ Detected website: {website_name}, using {tool_name}")
+                return {
+                    'tool': tool_name,
+                    'parameters': params,
+                    'reasoning': f"Opening {website_name} as requested"
+                }
+        
+        # Check for search patterns
+        if 'search' in intent_lower:
+            # Extract search query
+            if 'search' in intent_lower:
+                after_search = intent_lower.split('search')[1:] 
+                if after_search:
+                    query = after_search[0].strip().lstrip('for ').lstrip('of ')
+                    logger.info(f"   ✅ Detected search query: {query}")
+                    return {
+                        'tool': 'search_google',
+                        'parameters': {'query': query},
+                        'reasoning': f"Searching for '{query}'"
+                    }
+        
+        # Check for application launch
+        if 'open' in intent_lower or 'launch' in intent_lower:
+            apps = ['chrome', 'firefox', 'edge', 'notepad', 'calculator', 'powershell', 'cmd']
+            for app in apps:
+                if app in intent_lower:
+                    logger.info(f"   ✅ Detected app: {app}, using launch_application")
+                    return {
+                        'tool': 'launch_application',
+                        'parameters': {'app_name': app},
+                        'reasoning': f"Launching {app}"
+                    }
+        
+        logger.warning("   ⚠️ Could not create fallback plan, returning None")
+        return None
     
     def _extract_json_from_text(self, text: str) -> Optional[Dict]:
         """Extract JSON object from text"""
