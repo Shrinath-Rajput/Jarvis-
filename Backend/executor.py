@@ -1,24 +1,23 @@
 # ============================================
-# FINAL FULL WORKING executor.py
+# FINAL DYNAMIC executor.py
+# NO HARDCODED COMMANDS
 # ============================================
 
 import logging
 import traceback
 import pyautogui
 import webbrowser
+import subprocess
+import os
 import time
 
 from datetime import datetime
 from typing import List, Dict
 
-from browser_control import get_browser
-from computer_control import ComputerControl
-from config import DEBUG
-
 from screen_ai import click_text
 
 logging.basicConfig(
-    level=logging.DEBUG if DEBUG else logging.INFO
+    level=logging.INFO
 )
 
 logger = logging.getLogger(__name__)
@@ -85,14 +84,10 @@ class ExecutionEngine:
 
     def __init__(self):
 
-        self.browser = get_browser()
-
-        self.computer = ComputerControl()
-
         self.results = []
 
         logger.info(
-            "🔥 FINAL EXECUTION ENGINE READY"
+            "🤖 DYNAMIC EXECUTOR READY"
         )
 
     # ========================================
@@ -134,33 +129,26 @@ class ExecutionEngine:
             tool = action.get(
                 "tool",
                 ""
-            ).lower()
+            )
 
             params = action.get(
                 "params",
                 {}
             )
 
-            logger.info(
-                f"RUNNING TOOL: {tool}"
+            print(
+                f"🔥 TOOL: {tool}"
             )
 
             # ====================================
             # OPEN WEBSITE
             # ====================================
 
-            if tool in [
-
-                "open_website",
-
-                "navigate",
-
-                "open_url"
-            ]:
+            if tool == "open_website":
 
                 url = params.get(
                     "url",
-                    "https://google.com"
+                    ""
                 )
 
                 webbrowser.open(url)
@@ -177,36 +165,19 @@ class ExecutionEngine:
                 )
 
             # ====================================
-            # SEARCH GOOGLE
+            # OPEN APP
             # ====================================
 
-            elif tool in [
+            elif tool == "open_app":
 
-                "search_google",
-
-                "google_search"
-            ]:
-
-                query = params.get(
-                    "query",
+                app = params.get(
+                    "app",
                     ""
                 )
 
-                url = (
+                subprocess.Popen(app)
 
-                    "https://www.google.com/search?q="
-                    + query
-                )
-
-                webbrowser.open(url)
-
-                time.sleep(6)
-
-                pyautogui.press("tab")
-
-                time.sleep(1)
-
-                pyautogui.press("enter")
+                time.sleep(5)
 
                 return ExecutionResult(
 
@@ -214,40 +185,23 @@ class ExecutionEngine:
 
                     True,
 
-                    f"Searched Google: {query}"
+                    f"Opened app: {app}"
                 )
 
             # ====================================
-            # YOUTUBE SEARCH
+            # OPEN FOLDER
             # ====================================
 
-            elif tool in [
+            elif tool == "open_folder":
 
-                "search_youtube",
-
-                "youtube_search"
-            ]:
-
-                query = params.get(
-                    "query",
+                path = params.get(
+                    "path",
                     ""
                 )
 
-                url = (
+                os.startfile(path)
 
-                    "https://www.youtube.com/results?search_query="
-                    + query
-                )
-
-                webbrowser.open(url)
-
-                time.sleep(7)
-
-                pyautogui.press("tab")
-
-                time.sleep(1)
-
-                pyautogui.press("enter")
+                time.sleep(3)
 
                 return ExecutionResult(
 
@@ -255,37 +209,21 @@ class ExecutionEngine:
 
                     True,
 
-                    f"YouTube search: {query}"
+                    f"Opened folder: {path}"
                 )
 
             # ====================================
-            # CLICK
+            # CLICK TEXT
             # ====================================
 
-            elif tool == "click":
+            elif tool == "click_text":
 
                 text = params.get(
                     "text",
                     ""
                 )
 
-                x = params.get("x")
-
-                y = params.get("y")
-
-                success = False
-
-                # OCR CLICK
-                if text:
-
-                    success = click_text(text)
-
-                # COORDINATE CLICK
-                elif x is not None and y is not None:
-
-                    pyautogui.click(x, y)
-
-                    success = True
+                success = click_text(text)
 
                 return ExecutionResult(
 
@@ -293,21 +231,35 @@ class ExecutionEngine:
 
                     success,
 
-                    f"Clicked {text or (x,y)}",
+                    f"Clicked text: {text}"
+                )
 
-                    None if success else "Click failed"
+            # ====================================
+            # CLICK POSITION
+            # ====================================
+
+            elif tool == "click":
+
+                x = params.get("x")
+
+                y = params.get("y")
+
+                pyautogui.click(x, y)
+
+                return ExecutionResult(
+
+                    action,
+
+                    True,
+
+                    f"Clicked {x},{y}"
                 )
 
             # ====================================
             # TYPE
             # ====================================
 
-            elif tool in [
-
-                "type",
-
-                "type_text"
-            ]:
+            elif tool == "type":
 
                 text = params.get(
                     "text",
@@ -349,7 +301,7 @@ class ExecutionEngine:
 
                     True,
 
-                    f"Pressed {key}"
+                    f"Pressed: {key}"
                 )
 
             # ====================================
@@ -372,68 +324,6 @@ class ExecutionEngine:
                     True,
 
                     f"Hotkey: {keys}"
-                )
-
-            # ====================================
-            # OPEN VS CODE
-            # ====================================
-
-            elif tool == "open_vscode":
-
-                import subprocess
-
-                subprocess.Popen("code")
-
-                time.sleep(8)
-
-                return ExecutionResult(
-
-                    action,
-
-                    True,
-
-                    "VS Code opened"
-                )
-
-            # ====================================
-            # CREATE FOLDER
-            # ====================================
-
-            elif tool == "create_folder":
-
-                import os
-
-                folder = params.get(
-                    "name",
-                    "NewFolder"
-                )
-
-                desktop = os.path.join(
-
-                    os.path.expanduser("~"),
-
-                    "Desktop"
-                )
-
-                path = os.path.join(
-                    desktop,
-                    folder
-                )
-
-                os.makedirs(
-
-                    path,
-
-                    exist_ok=True
-                )
-
-                return ExecutionResult(
-
-                    action,
-
-                    True,
-
-                    f"Folder created: {folder}"
                 )
 
             # ====================================
@@ -462,7 +352,34 @@ class ExecutionEngine:
                 )
 
             # ====================================
-            # DEFAULT
+            # CREATE FOLDER
+            # ====================================
+
+            elif tool == "create_folder":
+
+                path = params.get(
+                    "path",
+                    ""
+                )
+
+                os.makedirs(
+
+                    path,
+
+                    exist_ok=True
+                )
+
+                return ExecutionResult(
+
+                    action,
+
+                    True,
+
+                    f"Folder created: {path}"
+                )
+
+            # ====================================
+            # UNKNOWN TOOL
             # ====================================
 
             else:
@@ -479,8 +396,6 @@ class ExecutionEngine:
                 )
 
         except Exception as e:
-
-            logger.error(str(e))
 
             traceback.print_exc()
 
