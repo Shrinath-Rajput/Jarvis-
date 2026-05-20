@@ -1,319 +1,357 @@
 """
-Screen Understanding Engine
-Analyzes screenshots to understand current UI state
+======================================
+SCREEN UNDERSTANDING ENGINE - AUTONOMOUS AI
+OCR + Element Detection + Dynamic Analysis
+======================================
+
+Provides real-time screen reading capabilities
+without any hardcoded UI mappings.
+Uses multiple OCR engines and computer vision.
 """
-import mss
+
+import os
+import json
+import logging
+import base64
 import cv2
 import numpy as np
-import easyocr
-import logging
-import json
+from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Tuple, Any
-import os
+from typing import Dict, List, Tuple, Optional
+from dataclasses import dataclass, asdict
+import mss
+from PIL import Image
+import pyautogui
+import time
 
-logging.basicConfig(level=logging.DEBUG)
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except:
+    PYTESSERACT_AVAILABLE = False
+
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+except:
+    EASYOCR_AVAILABLE = False
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# =========================
-# SCREEN CAPTURE
-# =========================
 
-class ScreenCapture:
-    """Captures and processes screen screenshots"""
+# ======================================
+# DATA STRUCTURES
+# ======================================
+
+@dataclass
+class TextElement:
+    """Detected text on screen"""
+    text: str
+    confidence: float
+    x: int
+    y: int
+    width: int
+    height: int
     
-    def __init__(self):
-        self.last_screenshot = None
-        self.last_capture_time = None
-        self.ocr_reader = easyocr.Reader(['en'], gpu=False)
-        logger.info("ScreenCapture initialized with OCR")
-    
-    def capture(self) -> np.ndarray:
-        """
-        Capture current screen
-        
-        Returns:
-            np.ndarray: Screenshot in BGR format (OpenCV)
-        """
-        try:
-            with mss.mss() as sct:
-                monitor = sct.monitors[1]  # Primary monitor
-                screenshot = sct.grab(monitor)
-                img = np.array(screenshot)
-                # MSS returns BGRA, convert to BGR
-                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-                self.last_screenshot = img
-                self.last_capture_time = datetime.now()
-                return img
-        except Exception as e:
-            logger.error(f"Screen capture error: {e}")
-            return None
-    
-    def save_screenshot(self, filename: str = None) -> str:
-        """
-        Save screenshot to disk
-        
-        Args:
-            filename: Optional custom filename
-            
-        Returns:
-            str: Path to saved file
-        """
-        if self.last_screenshot is None:
-            self.capture()
-        
-        if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"screenshot_{timestamp}.png"
-        
-        screenshots_dir = os.path.join(
-            os.path.dirname(__file__), "screenshots"
-        )
-        os.makedirs(screenshots_dir, exist_ok=True)
-        
-        filepath = os.path.join(screenshots_dir, filename)
-        cv2.imwrite(filepath, self.last_screenshot)
-        logger.info(f"Screenshot saved: {filepath}")
-        return filepath
+    def center(self) -> Tuple[int, int]:
+        return (self.x + self.width // 2, self.y + self.height // 2)
 
 
-# =========================
-# TEXT EXTRACTION
-# =========================
-
-class TextExtractor:
-    """Extracts text and OCR data from screenshots"""
-    
-    def __init__(self, ocr_reader):
-        self.ocr_reader = ocr_reader
-    
-    def extract_text(self, screenshot: np.ndarray) -> List[Dict[str, Any]]:
-        """
-        Extract all text from screenshot using OCR
-        
-        Args:
-            screenshot: Screenshot image
-            
-        Returns:
-            List of text elements with positions
-        """
-        try:
-            results = self.ocr_reader.readtext(screenshot)
-            
-            text_elements = []
-            for (bbox, text, confidence) in results:
-                # bbox is [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-                x_coords = [point[0] for point in bbox]
-                y_coords = [point[1] for point in bbox]
-                
-                element = {
-                    'text': text,
-                    'confidence': float(confidence),
-                    'bbox': {
-                        'x': int(min(x_coords)),
-                        'y': int(min(y_coords)),
-                        'width': int(max(x_coords) - min(x_coords)),
-                        'height': int(max(y_coords) - min(y_coords)),
-                        'center': {
-                            'x': int((min(x_coords) + max(x_coords)) / 2),
-                            'y': int((min(y_coords) + max(y_coords)) / 2)
-                        }
-                    }
-                }
-                text_elements.append(element)
-            
-            logger.info(f"Extracted {len(text_elements)} text elements")
-            return text_elements
-        except Exception as e:
-            logger.error(f"OCR extraction error: {e}")
-            return []
-    
-    def get_text_at_position(self, 
-                            text_elements: List[Dict],
-                            x: int, y: int,
-                            tolerance: int = 50) -> str:
-        """
-        Get text near a specific position
-        
-        Args:
-            text_elements: List of extracted text elements
-            x, y: Position to search around
-            tolerance: Search radius in pixels
-            
-        Returns:
-            str: Concatenated text near position
-        """
-        nearby = []
-        for elem in text_elements:
-            bbox = elem['bbox']
-            center = bbox['center']
-            distance = ((center['x'] - x)**2 + (center['y'] - y)**2)**0.5
-            if distance <= tolerance:
-                nearby.append((distance, elem['text']))
-        
-        nearby.sort(key=lambda x: x[0])
-        return ' '.join([text for _, text in nearby])
+@dataclass
+class ScreenState:
+    """Current screen state"""
+    timestamp: datetime
+    screenshot_path: str
+    window_title: str
+    text_elements: List[TextElement]
+    raw_text: str
 
 
-# =========================
-# SCREEN UNDERSTANDING
-# =========================
+# ======================================
+# SCREEN UNDERSTANDING ENGINE
+# ======================================
 
 class ScreenUnderstanding:
-    """Main screen understanding engine"""
+    """
+    Intelligent screen reading without hardcoding.
+    Uses OCR + CV to understand any UI dynamically.
+    """
     
     def __init__(self):
-        self.screen_capture = ScreenCapture()
-        self.text_extractor = TextExtractor(self.screen_capture.ocr_reader)
-        self.last_state = None
-        logger.info("ScreenUnderstanding initialized")
+        self.screenshot_dir = Path("screenshots")
+        self.screenshot_dir.mkdir(exist_ok=True)
+        
+        # Initialize OCR readers
+        self.easy_reader = None
+        self.pytesseract_available = False
+        
+        if EASYOCR_AVAILABLE:
+            try:
+                self.easy_reader = easyocr.Reader(['en'], gpu=False)
+                logger.info("✅ EasyOCR loaded")
+            except Exception as e:
+                logger.warning(f"EasyOCR failed: {e}")
+        
+        if PYTESSERACT_AVAILABLE:
+            try:
+                pytesseract.pytesseract.pytesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+                self.pytesseract_available = True
+                logger.info("✅ Tesseract loaded")
+            except:
+                logger.warning("Tesseract not available")
+        
+        if not self.easy_reader and not self.pytesseract_available:
+            logger.warning("⚠️ No OCR engine available - install easyocr or tesseract")
+        
+        logger.info("✅ ScreenUnderstanding initialized")
     
-    def analyze_screen(self) -> Dict[str, Any]:
+    # ======================================
+    # SCREENSHOT CAPTURE
+    # ======================================
+    
+    def take_screenshot(self) -> Optional[Path]:
+        """Capture current screen"""
+        try:
+            with mss.mss() as sct:
+                monitor = sct.monitors[1]
+                screenshot = sct.grab(monitor)
+                
+                img = Image.frombytes(
+                    'RGB',
+                    (screenshot.width, screenshot.height),
+                    screenshot.rgb
+                )
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                path = self.screenshot_dir / f"screen_{timestamp}.png"
+                img.save(path)
+                
+                logger.info(f"📸 Screenshot: {path.name}")
+                return path
+        except Exception as e:
+            logger.error(f"❌ Screenshot error: {e}")
+            return None
+    
+    # ======================================
+    # OCR ANALYSIS
+    # ======================================
+    
+    def extract_text_with_positions(self, image_path: Path) -> List[TextElement]:
         """
-        Complete screen analysis
-        
-        Returns:
-            Dict with screen state information
+        Extract text with positions using OCR.
+        Tries multiple OCR engines for best results.
         """
-        # Capture screenshot
-        screenshot = self.screen_capture.capture()
-        if screenshot is None:
-            return {'error': 'Failed to capture screen'}
         
-        # Extract text
-        text_elements = self.text_extractor.extract_text(screenshot)
+        try:
+            img = cv2.imread(str(image_path))
+            if img is None:
+                logger.error(f"Failed to load image: {image_path}")
+                return []
+            
+            elements = []
+            
+            # Try EasyOCR first (better for complex layouts)
+            if self.easy_reader:
+                try:
+                    rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    results = self.easy_reader.readtext(rgb_img)
+                    
+                    for (bbox, text, confidence) in results:
+                        if confidence > 0.2 and len(text.strip()) > 0:
+                            x, y = int(bbox[0][0]), int(bbox[0][1])
+                            w, h = int(bbox[2][0] - bbox[0][0]), int(bbox[2][1] - bbox[0][1])
+                            
+                            elements.append(TextElement(
+                                text=text.strip(),
+                                confidence=float(confidence),
+                                x=x, y=y,
+                                width=max(w, 1), height=max(h, 1)
+                            ))
+                    
+                    logger.info(f"📖 EasyOCR: {len(elements)} text elements")
+                    return elements
+                except Exception as e:
+                    logger.warning(f"EasyOCR error: {e}")
+            
+            # Fallback to Tesseract
+            if self.pytesseract_available:
+                try:
+                    data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+                    
+                    for i in range(len(data['text'])):
+                        if data['conf'][i] > 20 and len(data['text'][i].strip()) > 0:
+                            elements.append(TextElement(
+                                text=data['text'][i],
+                                confidence=data['conf'][i] / 100.0,
+                                x=data['left'][i],
+                                y=data['top'][i],
+                                width=max(data['width'][i], 1),
+                                height=max(data['height'][i], 1)
+                            ))
+                    
+                    logger.info(f"📖 Tesseract: {len(elements)} text elements")
+                    return elements
+                except Exception as e:
+                    logger.warning(f"Tesseract error: {e}")
+            
+            return elements
         
-        # Create state
-        state = {
-            'timestamp': datetime.now().isoformat(),
-            'screenshot_size': {
-                'width': screenshot.shape[1],
-                'height': screenshot.shape[0]
-            },
-            'text_elements': text_elements,
-            'all_text': ' '.join([elem['text'] for elem in text_elements]),
-            'element_count': len(text_elements)
-        }
-        
-        # Detect changes from last state
-        if self.last_state:
-            state['changed'] = self._detect_change(
-                self.last_state, state
+        except Exception as e:
+            logger.error(f"❌ OCR error: {e}")
+            return []
+    
+    # ======================================
+    # WINDOW TITLE
+    # ======================================
+    
+    def get_active_window_title(self) -> str:
+        """Get current active window title"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['powershell', '-Command', 
+                 '(Get-Process | Where-Object {$_.MainWindowTitle -ne ""} | Select-Object -First 1).MainWindowTitle'],
+                capture_output=True,
+                text=True,
+                timeout=3
             )
-        else:
-            state['changed'] = True
-        
-        self.last_state = state
-        return state
+            title = result.stdout.strip()
+            return title if title else "Unknown"
+        except:
+            return "Unknown"
     
-    def _detect_change(self, last_state: Dict, current_state: Dict) -> bool:
-        """
-        Detect if screen has changed significantly
-        
-        Args:
-            last_state: Previous screen state
-            current_state: Current screen state
-            
-        Returns:
-            bool: True if screen changed significantly
-        """
-        # Simple heuristic: check if text changed
-        last_text = set(last_state.get('all_text', '').split())
-        current_text = set(current_state.get('all_text', '').split())
-        
-        # If more than 20% of text changed, consider it a change
-        if len(last_text) == 0:
-            return True
-        
-        diff = len(last_text.symmetric_difference(current_text))
-        change_ratio = diff / max(len(last_text), len(current_text))
-        
-        return change_ratio > 0.2
+    # ======================================
+    # FULL SCREEN STATE
+    # ======================================
     
-    def find_clickable_element(self, target_text: str,
-                               text_elements: List[Dict] = None,
-                               fuzzy: bool = True) -> Dict or None:
+    def analyze_screen(self) -> Optional[ScreenState]:
         """
-        Find clickable element by text
+        Perform complete screen analysis.
+        Returns: ScreenState with all detected elements
+        """
         
-        Args:
-            target_text: Text to search for
-            text_elements: List of text elements (uses last if None)
-            fuzzy: Use fuzzy matching
-            
-        Returns:
-            Element dict with position, or None
-        """
-        if text_elements is None:
-            if self.last_state:
-                text_elements = self.last_state.get('text_elements', [])
-            else:
+        try:
+            # Capture
+            screenshot_path = self.take_screenshot()
+            if not screenshot_path:
                 return None
-        
-        target_lower = target_text.lower()
-        
-        for elem in text_elements:
-            elem_text = elem['text'].lower()
             
-            if fuzzy:
-                # Fuzzy match: check if target is substring
-                if target_lower in elem_text or elem_text in target_lower:
-                    return elem
-            else:
-                # Exact match
-                if elem_text == target_lower:
-                    return elem
+            # Extract text
+            text_elements = self.extract_text_with_positions(screenshot_path)
+            raw_text = "\n".join([e.text for e in text_elements])
+            
+            # Window title
+            window_title = self.get_active_window_title()
+            
+            state = ScreenState(
+                timestamp=datetime.now(),
+                screenshot_path=str(screenshot_path),
+                window_title=window_title,
+                text_elements=text_elements,
+                raw_text=raw_text
+            )
+            
+            logger.info(f"✅ Analysis: {window_title} | {len(text_elements)} elements")
+            return state
         
-        return None
+        except Exception as e:
+            logger.error(f"❌ Analysis error: {e}")
+            return None
     
-    def get_visible_text(self) -> str:
-        """
-        Get all visible text on current screen
-        
-        Returns:
-            str: All visible text
-        """
-        if self.last_state:
-            return self.last_state.get('all_text', '')
-        return ''
+    # ======================================
+    # SEARCH FOR TEXT
+    # ======================================
     
-    def describe_current_screen(self) -> str:
+    def find_text_on_screen(self, search_text: str) -> Optional[TextElement]:
         """
-        Generate natural language description of current screen
-        
-        Returns:
-            str: Description for LLM
+        Find specific text on screen.
+        Returns: TextElement with position or None
         """
-        if not self.last_state:
-            return "Screen not analyzed yet"
         
-        state = self.last_state
-        description = f"""
-Current Screen State:
-- Size: {state['screenshot_size']['width']}x{state['screenshot_size']['height']}
-- Elements visible: {state['element_count']}
-- Changed since last: {state.get('changed', False)}
-
-Visible Text:
-{state['all_text'][:500]}...
-
-Top Elements:
-"""
-        # Add top 10 elements
-        for i, elem in enumerate(state['text_elements'][:10]):
-            bbox = elem['bbox']
-            description += f"\n{i+1}. '{elem['text']}' at ({bbox['center']['x']}, {bbox['center']['y']})"
+        try:
+            # Take fresh screenshot
+            screenshot_path = self.take_screenshot()
+            if not screenshot_path:
+                return None
+            
+            # Extract text
+            elements = self.extract_text_with_positions(screenshot_path)
+            
+            # Search (case-insensitive, partial match)
+            search_lower = search_text.lower().strip()
+            
+            for elem in elements:
+                if search_lower in elem.text.lower():
+                    logger.info(f"✅ Found: '{search_text}' at ({elem.x}, {elem.y})")
+                    return elem
+            
+            logger.info(f"❌ Not found: '{search_text}'")
+            return None
         
-        return description
+        except Exception as e:
+            logger.error(f"❌ Find error: {e}")
+            return None
+    
+    # ======================================
+    # VERIFY ACTION
+    # ======================================
+    
+    def verify_text_appeared(self, search_text: str, timeout: int = 5) -> bool:
+        """
+        Verify if text appeared after action.
+        Used for validation after clicks/typing.
+        """
+        
+        start = time.time()
+        
+        while time.time() - start < timeout:
+            elem = self.find_text_on_screen(search_text)
+            if elem:
+                logger.info(f"✅ Verified: '{search_text}' appeared")
+                return True
+            time.sleep(0.3)
+        
+        logger.warning(f"⚠️ Timeout: '{search_text}' not verified")
+        return False
+    
+    # ======================================
+    # EXPORT STATE
+    # ======================================
+    
+    def export_state(self, state: ScreenState) -> Dict:
+        """Convert screen state to JSON-serializable dict"""
+        
+        return {
+            "timestamp": state.timestamp.isoformat(),
+            "screenshot_path": state.screenshot_path,
+            "window_title": state.window_title,
+            "text_elements": [asdict(e) for e in state.text_elements],
+            "raw_text": state.raw_text,
+            "element_count": len(state.text_elements)
+        }
 
 
-# =========================
-# SINGLETON INSTANCE
-# =========================
+# ======================================
+# SINGLETON
+# ======================================
 
-_screen_understanding = None
+screen_understanding = ScreenUnderstanding()
 
-def get_screen_understanding() -> ScreenUnderstanding:
+
+def analyze_current_screen() -> Optional[ScreenState]:
+    """Analyze current screen"""
+    return screen_understanding.analyze_screen()
+
+
+def find_text(text: str) -> Optional[TextElement]:
+    """Find text on screen"""
+    return screen_understanding.find_text_on_screen(text)
+
+
+def verify_text(text: str, timeout: int = 5) -> bool:
+    """Verify text appears"""
+    return screen_understanding.verify_text_appeared(text, timeout)
     """Get or create screen understanding instance"""
     global _screen_understanding
     if _screen_understanding is None:

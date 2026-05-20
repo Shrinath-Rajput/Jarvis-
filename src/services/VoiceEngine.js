@@ -234,7 +234,78 @@ export class VoiceEngine {
       } catch (e) {}
     }
   }
+
+  // ===== NEW METHODS FOR PREMIUM UI =====
+
+  /**
+   * Start listening for voice input
+   * @param {Function} onResult - Callback when speech ends
+   * @param {Function} onError - Error callback
+   * @returns {Promise<string>} Final transcript
+   */
+  startListening(onResult, onError) {
+    return this.listen((transcript) => {
+      if (onResult) onResult(transcript);
+    }).then((finalTranscript) => {
+      if (onResult) onResult(finalTranscript);
+      return finalTranscript;
+    }).catch((error) => {
+      if (onError) onError(error);
+      throw error;
+    });
+  }
+
+  /**
+   * Stop listening for voice input
+   */
+  stopListening() {
+    this.stop();
+  }
+
+  /**
+   * Speak text using text-to-speech
+   * @param {string} text - Text to speak
+   * @returns {Promise<void>}
+   */
+  speak(text) {
+    return new Promise((resolve, reject) => {
+      if (!window.speechSynthesis) {
+        reject("Speech Synthesis not supported");
+        return;
+      }
+
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      utterance.onstart = () => {
+        console.log("Speech started");
+      };
+
+      utterance.onend = () => {
+        console.log("Speech ended");
+        resolve();
+      };
+
+      utterance.onerror = (error) => {
+        console.error("Speech error:", error);
+        reject(error);
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
 }
 
 export const voiceEngine =
   new VoiceEngine();
+
+export default voiceEngine;

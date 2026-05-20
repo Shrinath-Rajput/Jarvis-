@@ -1,5 +1,5 @@
 /**
- * FINAL STABLE BACKEND EXECUTOR
+ * FINAL REAL AUTONOMOUS BACKEND EXECUTOR
  */
 
 const BACKEND_URL = "http://127.0.0.1:5000";
@@ -9,13 +9,13 @@ class BackendExecutor {
     constructor() {
 
         this.isConnected = false;
+
         this.executionHistory = [];
-        this.lastTaskId = null;
     }
 
-    // =========================
-    // HEALTH CHECK
-    // =========================
+    // ====================================================
+    // HEALTH
+    // ====================================================
 
     async checkHealth() {
 
@@ -24,10 +24,10 @@ class BackendExecutor {
             const response = await fetch(
 
                 `${BACKEND_URL}/health`
-
             );
 
-            const data = await response.json();
+            const data =
+                await response.json();
 
             this.isConnected = true;
 
@@ -60,9 +60,9 @@ class BackendExecutor {
         }
     }
 
-    // =========================
+    // ====================================================
     // EXECUTE TASK
-    // =========================
+    // ====================================================
 
     async executeTask(command) {
 
@@ -73,9 +73,9 @@ class BackendExecutor {
 
         try {
 
-            // ---------------------
-            // HEALTH CHECK
-            // ---------------------
+            // ============================================
+            // HEALTH
+            // ============================================
 
             const health =
                 await this.checkHealth();
@@ -87,9 +87,9 @@ class BackendExecutor {
                 );
             }
 
-            // ---------------------
-            // SEND REQUEST
-            // ---------------------
+            // ============================================
+            // REQUEST
+            // ============================================
 
             const response = await fetch(
 
@@ -114,9 +114,9 @@ class BackendExecutor {
                 }
             );
 
-            // ---------------------
-            // RESPONSE ERROR
-            // ---------------------
+            // ============================================
+            // HTTP ERROR
+            // ============================================
 
             if (!response.ok) {
 
@@ -126,9 +126,9 @@ class BackendExecutor {
                 );
             }
 
-            // ---------------------
+            // ============================================
             // JSON
-            // ---------------------
+            // ============================================
 
             const data =
                 await response.json();
@@ -138,9 +138,9 @@ class BackendExecutor {
                 data
             );
 
-            // ---------------------
+            // ============================================
             // HISTORY
-            // ---------------------
+            // ============================================
 
             this.executionHistory.push({
 
@@ -152,26 +152,80 @@ class BackendExecutor {
                 result: data
             });
 
-            // ---------------------
-            // RETURN
-            // ---------------------
+            // ============================================
+            // FORCE SUCCESS DETECTION
+            // ============================================
+
+            const isSuccess =
+
+                data?.success === true ||
+
+                data?.status === "completed" ||
+
+                data?.status === "success" ||
+
+                data?.response ===
+                    "Task completed successfully";
+
+            // ============================================
+            // FAILED
+            // ============================================
+
+            if (!isSuccess) {
+
+                console.error(
+                    "[BackendExecutor] Task failed"
+                );
+
+                return {
+
+                    success: false,
+
+                    status: "failed",
+
+                    response:
+
+                        data?.response ||
+
+                        data?.error ||
+
+                        data?.message ||
+
+                        "Task failed",
+
+                    result: data,
+
+                    executionTime:
+                        data?.execution_time || 0
+                };
+            }
+
+            // ============================================
+            // SUCCESS
+            // ============================================
+
+            console.log(
+                "[BackendExecutor] Task success"
+            );
 
             return {
 
-                success:
-                    data.success || false,
+                success: true,
+
+                status: "completed",
 
                 response:
-                    data.response ||
 
-                    data.result ||
+                    data?.response ||
 
-                    "Task executed",
+                    data?.message ||
+
+                    "Task completed successfully",
 
                 result: data,
 
                 executionTime:
-                    data.execution_time || 0
+                    data?.execution_time || 0
             };
 
         } catch (error) {
@@ -185,6 +239,8 @@ class BackendExecutor {
 
                 success: false,
 
+                status: "failed",
+
                 response:
                     "Execution failed",
 
@@ -193,14 +249,18 @@ class BackendExecutor {
         }
     }
 
-    // =========================
+    // ====================================================
     // HISTORY
-    // =========================
+    // ====================================================
 
     getHistory() {
 
         return this.executionHistory;
     }
+
+    // ====================================================
+    // CLEAR
+    // ====================================================
 
     clearHistory() {
 
@@ -208,15 +268,12 @@ class BackendExecutor {
     }
 }
 
-// =========================
-// SINGLETON
-// =========================
-
 const backendExecutor =
     new BackendExecutor();
 
 export default backendExecutor;
 
 export const getBackendExecutor = () => {
+
     return backendExecutor;
 };

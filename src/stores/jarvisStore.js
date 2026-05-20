@@ -1,10 +1,11 @@
 import { create } from 'zustand';
+import { getCurrentUser, getAllUsers } from '../services/authService';
 
 export const useJarvisStore = create((set) => ({
   // Auth State
-  currentUser: null,
-  isAuthenticated: false,
-  users: JSON.parse(localStorage.getItem('jarvis_users') || '[]'),
+  currentUser: getCurrentUser(), // Auto-load from localStorage
+  isAuthenticated: getCurrentUser() !== null,
+  users: getAllUsers(), // Load users from localStorage
 
   // Voice State
   isListening: false,
@@ -17,14 +18,14 @@ export const useJarvisStore = create((set) => ({
   taskHistory: [],
 
   // AI State
-  aiStatus: 'idle', // idle, listening, thinking, executing
+  aiStatus: 'idle', // idle, listening, thinking, executing, speaking
   aiResponse: '',
   isProcessing: false,
 
   // Backend State
   backendStatus: 'connecting', // connecting, connected, disconnected
   systemStatus: {
-    ai: 'idle',
+    ai: 'ready',
     browser: 'ready',
     executor: 'ready',
   },
@@ -39,22 +40,15 @@ export const useJarvisStore = create((set) => ({
   recentLogins: [],
 
   // Auth Actions
-  setCurrentUser: (user) => set((state) => {
-    const updatedUser = user;
-    if (user && !state.users.find(u => u.email === user.email)) {
-      const updatedUsers = [...state.users, {
-        ...user,
-        loginTime: new Date().toISOString(),
-        lastActive: new Date().toISOString(),
-      }];
-      localStorage.setItem('jarvis_users', JSON.stringify(updatedUsers));
-      set({ users: updatedUsers });
-      set({ totalUsers: updatedUsers.length });
-    }
-    return { currentUser: updatedUser, isAuthenticated: !!user };
+  setCurrentUser: (user) => set({
+    currentUser: user,
+    isAuthenticated: !!user,
   }),
 
-  logout: () => set({ currentUser: null, isAuthenticated: false }),
+  logout: () => set({
+    currentUser: null,
+    isAuthenticated: false,
+  }),
 
   // Voice Actions
   setIsListening: (listening) => set({ isListening: listening }),
