@@ -16,19 +16,35 @@ export class VoiceEngine {
       ? new SpeechRecognition()
       : null;
 
+    // ✅ ROBUST STATE TRACKING
     this.isWakeWordActive = false;
     this.isListeningWake = false;
+    this.isListening = false;
+    this.recognitionStarting = false;
+    this.wakeRecognitionStarting = false;
 
     if (this.recognition) {
       this.recognition.continuous = false;
       this.recognition.interimResults = true;
       this.recognition.lang = "en-US";
+      
+      // ✅ PREVENT DOUBLE-START ON BOOT
+      this.recognition.onstart = () => {
+        console.log("🎤 Main recognition started");
+        this.recognitionStarting = false;
+      };
     }
 
     if (this.wakeRecognition) {
       this.wakeRecognition.continuous = true;
       this.wakeRecognition.interimResults = true;
       this.wakeRecognition.lang = "en-US";
+      
+      // ✅ PREVENT DOUBLE-START ON BOOT
+      this.wakeRecognition.onstart = () => {
+        console.log("👂 Wake recognition started");
+        this.wakeRecognitionStarting = false;
+      };
     }
   }
 
@@ -67,7 +83,7 @@ export class VoiceEngine {
         combined.includes("hey jarvis")
       ) {
 
-        console.log("WAKE WORD DETECTED");
+        console.log("🎯 WAKE WORD DETECTED");
 
         this.stopWakeWord();
 
@@ -77,13 +93,23 @@ export class VoiceEngine {
 
     this.wakeRecognition.onerror = (event) => {
 
-      console.log(
-        "Wake Error:",
+      console.error(
+        "👂 Wake Error:",
         event.error
       );
 
+      // ✅ RESET STATE ON ERROR
+      this.wakeRecognitionStarting = false;
+
       if (event.error === 'not-allowed') {
+        console.warn("Microphone access denied");
         this.stopWakeWord();
+      }
+      
+      // ✅ AUTO-RESTART ON NETWORK ERROR
+      if (event.error === 'network' && this.isWakeWordActive) {
+        console.log("Retrying wake detection in 2s...");
+        setTimeout(() => this.startWakeWord(onWakeDetected, onMicLevel), 2000);
       }
     };
 
@@ -97,14 +123,18 @@ export class VoiceEngine {
 
           try {
 
-            if (!this.isListeningWake) {
+            // ✅ CHECK BOTH FLAGS BEFORE STARTING
+            if (!this.isListeningWake && !this.wakeRecognitionStarting) {
 
+              this.wakeRecognitionStarting = true;
               this.wakeRecognition.start();
-
               this.isListeningWake = true;
             }
 
-          } catch (e) {}
+          } catch (e) {
+            console.error("Failed to restart wake detection:", e.message);
+            this.wakeRecognitionStarting = false;
+          }
 
         }, 1000);
       }
@@ -112,18 +142,22 @@ export class VoiceEngine {
 
     try {
 
-      if (!this.isListeningWake) {
+      // ✅ CHECK BOTH FLAGS TO PREVENT DOUBLE-START
+      if (!this.isListeningWake && !this.wakeRecognitionStarting) {
 
+        this.wakeRecognitionStarting = true;
         this.wakeRecognition.start();
-
         this.isListeningWake = true;
+        console.log("👂 Wake word detection started");
       }
 
     } catch (e) {
 
-      console.log(
-        "Wake already running"
+      console.error(
+        "Wake word error:",
+        e.message
       );
+      this.wakeRecognitionStarting = false;
     }
   }
 
@@ -200,30 +234,74 @@ export class VoiceEngine {
       ) => {
 
         console.error(
-          "Voice Error:",
+          "🎤 Voice Error:",
           event.error
         );
 
-        reject(event.error);
+        this.isListening = false;
+        this.recognitionStarting = false;
+        
+        // ✅ BETTER ERROR MESSAGES
+        if (event.error === 'no-speech') {
+          reject("No speech detected. Please try again.");
+        } else if (event.error === 'not-allowed') {
+          reject("Microphone access denied.");
+        } else if (event.error === 'network') {
+          reject("Network error. Check your connection.");
+        } else {
+          reject(event.error);
+        }
       };
 
       this.recognition.onend = () => {
 
+        this.isListening = false;
+        this.recognitionStarting = false;
+        
+        console.log("🎤 Recognition ended, transcript:", finalTranscript);
         resolve(finalTranscript);
       };
 
       try {
 
-        this.recognition.start();
+        // ✅ STOP FIRST IF ALREADY RUNNING
+        if (this.isListening || this.recognitionStarting) {
+          try {
+            this.recognition.stop();
+            this.isListening = false;
+            this.recognitionStarting = false;
+          } catch (e) {
+            console.warn("Could not stop recognition:", e.message);
+          }
+        }
+
+        // ✅ ADD SMALL DELAY BEFORE RESTARTING
+        setTimeout(() => {
+          try {
+            this.recognitionStarting = true;
+            this.isListening = true;
+            this.recognition.start();
+            console.log("🎤 Listening...");
+          } catch (e) {
+            this.isListening = false;
+            this.recognitionStarting = false;
+            console.error("Failed to start recognition:", e.message);
+            reject(e);
+          }
+        }, 100);
 
       } catch (e) {
 
+        this.isListening = false;
+        this.recognitionStarting = false;
         reject(e);
       }
     });
   }
 
   stop() {
+
+    this.isListening = false;
 
     if (this.recognition) {
 

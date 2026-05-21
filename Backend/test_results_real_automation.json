@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-05-21T13:35:08.686955",
+  "total_tests": 3,
+  "passed": 3,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Create Folder",
+      "success": true,
+      "result": "{'success': True, 'message': '\u2705 Created folder: C:\\\\Users\\\\rajpu/Desktop\\\\JARVIS_Test_Folder', 'path': 'C:\\\\Users\\\\rajpu/Desktop\\\\JARVIS_Test_Folder', 'exists': True}",
+      "notes": "Folder exists: True, Path verified: C:\\Users\\rajpu/Desktop/JARVIS_Test_Folder"
+    },
+    {
+      "name": "List Running Apps",
+      "success": true,
+      "result": "{'success': True, 'apps': ['SystemOptimizer.exe', 'M365Copilot.exe', 'HPCommRecovery.exe', 'PresentMon_x64.exe', 'NisSrv.exe', 'FileSyncHelper.exe', 'DesktopExtension.exe', 'OmenCommandCenterBackground.exe', 'SecurityHealthService.exe', 'nvfvsdksvc_x64.exe', 'HPSystemEventUtilityHost.exe', 'msedge.exe', 'HPSystemEventUtilityBackground.exe', 'audiodg.exe', 'UserOOBEBroker.exe', 'TextInputHost.exe', 'cmd.exe', 'dasHost.exe', 'taskhostw.exe', 'ETDService.exe', 'OmenInstallMonitor.exe', 'DiagsCap.ex",
+      "notes": "Found 118 running processes"
+    },
+    {
+      "name": "Developer Tools - Open Terminal",
+      "success": true,
+      "result": "{'success': True, 'message': '\u2705 Terminal opened', 'pid': 28428}",
+      "notes": "Terminal should open and process should be verified"
+    }
+  ]
+}

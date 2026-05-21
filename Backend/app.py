@@ -1,287 +1,178 @@
-# =========================================================
-# FINAL WORKING app.py
-# DYNAMIC AUTONOMOUS AI SERVER
-# =========================================================
+# app.py
 
-from flask import Flask, request, jsonify
+import json
+from datetime import datetime
+from flask import (
+    Flask,
+    request,
+    jsonify
+)
+
 from flask_cors import CORS
 
-import logging
-import traceback
+from config import validate_config
+from planner_ai import DynamicPlanner
+from executor import execute_plan
 
-# =========================================================
-# IMPORTS
-# =========================================================
-
-try:
-
-    from planner_ai import DynamicPlanner
-
-    PLANNER_AVAILABLE = True
-
-except Exception as e:
-
-    print("PLANNER ERROR:", e)
-
-    PLANNER_AVAILABLE = False
-
-try:
-
-    from executor import execute_plan
-
-    EXECUTOR_AVAILABLE = True
-
-except Exception as e:
-
-    print("EXECUTOR ERROR:", e)
-
-    EXECUTOR_AVAILABLE = False
-
-# =========================================================
-# APP
-# =========================================================
-
-logging.basicConfig(level=logging.INFO)
-
-logger = logging.getLogger(__name__)
+validate_config()
 
 app = Flask(__name__)
 
 CORS(app)
 
-# =========================================================
-# HEALTH
-# =========================================================
+planner = DynamicPlanner()
 
-@app.route("/health", methods=["GET"])
-def health():
+# ===================================
+# LOGGING
+# ===================================
+
+def log_event(event_type, message, data=None):
+    """Log events with timestamp"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] [{event_type}] {message}")
+    if data:
+        print(f"  → {json.dumps(data, indent=2)}")
+
+
+@app.route("/")
+def root():
+
+    log_event("INFO", "Root endpoint accessed")
 
     return jsonify({
 
         "success": True,
 
-        "status": "healthy",
-
-        "planner": PLANNER_AVAILABLE,
-
-        "executor": EXECUTOR_AVAILABLE
+        "message": "Jarvis AI Backend Running"
     })
 
-# =========================================================
-# MAIN EXECUTION
-# =========================================================
 
-@app.route("/api/autonomous/execute", methods=["POST"])
-def autonomous_execute():
+@app.route("/health")
+def health():
+
+    log_event("INFO", "Health check")
+
+    return jsonify({
+        "success": True
+    })
+
+
+@app.route("/status")
+def status():
+    """Get detailed backend status"""
+    
+    import platform
+    import sys
+    
+    log_event("STATUS", "Status check requested")
+    
+    status_data = {
+        "backend": "running",
+        "version": "1.0",
+        "python": platform.python_version(),
+        "platform": platform.system(),
+        "endpoints": {
+            "health": "http://127.0.0.1:5000/health",
+            "execute": "http://127.0.0.1:5000/api/autonomous/execute",
+            "status": "http://127.0.0.1:5000/status"
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    return jsonify(status_data)
+
+
+@app.route(
+    "/api/autonomous/execute",
+    methods=["POST"]
+)
+def execute():
 
     try:
 
-        # =================================================
-        # CHECK SYSTEM
-        # =================================================
-
-        if not PLANNER_AVAILABLE:
-
-            return jsonify({
-
-                "success": False,
-
-                "response":
-                    "Planner not available"
-            })
-
-        if not EXECUTOR_AVAILABLE:
-
-            return jsonify({
-
-                "success": False,
-
-                "response":
-                    "Executor not available"
-            })
-
-        # =================================================
-        # GET TASK
-        # =================================================
-
         data = request.json
 
-        task = data.get("task", "").strip()
+        task = data.get("task")
+
+        log_event("TASK", f"Received task: {task}")
 
         if not task:
 
+            log_event("ERROR", "Task is missing from request")
+
             return jsonify({
 
                 "success": False,
 
-                "response":
-                    "No task provided"
-            })
+                "error": "Task missing"
+            }), 400
 
-        print("\n🔥 USER TASK:")
-        print(task)
-
-        # =================================================
-        # CREATE PLANNER
-        # =================================================
-
-        planner = DynamicPlanner()
-
-        # =================================================
-        # GENERATE PLAN
-        # =================================================
-
+        # Plan the task
+        log_event("PLANNING", f"Planning task: {task}")
+        
         plan = planner.plan_task(task)
+        
+        log_event("PLAN", f"Generated plan with {len(plan)} steps", plan)
 
-        print("\n🧠 GENERATED PLAN:")
-        print(f"  Steps: {len(plan) if plan else 0}")
-        for idx, step in enumerate(plan or []):
-            print(f"  {idx+1}. {step.get('tool', 'unknown')} - {step.get('params', {})}")
-
-
-        # =================================================
-        # PLAN FAILED
-        # =================================================
-
-        if not plan or len(plan) == 0:
-            return jsonify({
-                "success": False,
-                "response": "Could not generate plan",
-                "task": task,
-                "plan": None,
-                "results": [],
-                "error": "Planner returned empty plan"
-            })
-
-        # =================================================
-        # EXECUTE PLAN
-        # =================================================
-
+        # Execute the plan
+        log_event("EXECUTING", f"Executing plan...")
+        
         results = execute_plan(plan)
+        
+        log_event("EXECUTION_RESULTS", f"Execution complete", results)
 
-        print("\n⚡ EXECUTION RESULTS:")
-        print(results)
+        # Check if any step succeeded
+        success = any(
+            r.get("success", False)
+            for r in results
+        )
 
-        # =================================================
-        # CHECK RESULTS
-        # =================================================
+        response = {
 
-        # Count successes and failures
-        successful_actions = [r for r in results if r.get("success", False)]
-        failed_actions = [r for r in results if not r.get("success", True)]
+            "success": success,
 
-        # Task is successful if ANY action succeeded
-        task_success = len(successful_actions) > 0
-
-        print(f"\n📊 RESULTS ANALYSIS:")
-        print(f"  ✅ Successful: {len(successful_actions)}/{len(results)}")
-        print(f"  ❌ Failed: {len(failed_actions)}/{len(results)}")
-
-        # =================================================
-        # FINAL RESPONSE
-        # =================================================
-
-        return jsonify({
-            "success": task_success,
-            "status": "completed" if task_success else "failed",
-            "response": (
-                "Task completed successfully"
-                if task_success
-                else "Task could not be completed"
-            ),
             "task": task,
+
             "plan": plan,
+
             "results": results,
-            "summary": {
-                "total_steps": len(results),
-                "successful_steps": len(successful_actions),
-                "failed_steps": len(failed_actions)
-            }
-        })
+            
+            "message": "Task completed" if success else "Task failed",
+            
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        log_event("SUCCESS" if success else "FAILURE", 
+                 f"Task response: success={success}")
+
+        return jsonify(response)
 
     except Exception as e:
 
-        traceback.print_exc()
+        log_event("ERROR", f"Execution error: {str(e)}")
 
         return jsonify({
 
             "success": False,
 
-            "response": str(e)
-        })
+            "error": str(e),
+            
+            "timestamp": datetime.now().isoformat()
+        }), 500
 
-# =========================================================
-# TEST
-# =========================================================
-
-@app.route("/", methods=["GET"])
-def root():
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Autonomous AI Running"
-    })
-
-# =========================================================
-# INFO
-# =========================================================
-
-@app.route("/api/info", methods=["GET"])
-def info():
-
-    return jsonify({
-
-        "name":
-            "Dynamic Autonomous AI",
-
-        "hardcoded":
-            False,
-
-        "architecture":
-            "OTAV",
-
-        "features": [
-
-            "Dynamic reasoning",
-
-            "OCR clicking",
-
-            "LLM planning",
-
-            "No hardcoding",
-
-            "Self verification",
-
-            "Retry system"
-        ]
-    })
-
-# =========================================================
-# START
-# =========================================================
 
 if __name__ == "__main__":
 
-    print("\n🚀 AUTONOMOUS AI STARTED")
-
-    print("✅ Dynamic reasoning enabled")
-
-    print("✅ No hardcoding")
-
-    print("✅ OCR enabled")
-
-    print("✅ Planner ready")
-
-    print("✅ Executor ready")
+    log_event("STARTUP", "Starting Jarvis Backend Server")
+    
+    print("\n" + "="*60)
+    print("  🤖 JARVIS AI BACKEND")
+    print("  Running on http://127.0.0.1:5000")
+    print("  Press Ctrl+C to stop")
+    print("="*60 + "\n")
 
     app.run(
-
         host="127.0.0.1",
-
         port=5000,
-
-        debug=False
+        debug=True
     )
