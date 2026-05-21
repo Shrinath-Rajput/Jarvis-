@@ -1,371 +1,559 @@
 # app_launcher.py
 """
-Application launcher and manager for JARVIS
-PRODUCTION-GRADE with real verification and error handling
+FULL DYNAMIC APP LAUNCHER
+NO HARDCODED COMMANDS
+REAL WINDOWS AUTOMATION
 """
 
-import subprocess
 import os
 import time
-import psutil
+import shutil
 import logging
-from pathlib import Path
+import subprocess
+import psutil
+import pyautogui
 
-# Setup logging
+try:
+    import pygetwindow as gw
+except:
+    gw = None
+
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(message)s'
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
 logger = logging.getLogger(__name__)
 
 
 class AppLauncher:
-    """Handle application launching with REAL verification"""
-    
-    # Application paths mapping with actual Windows executables
-    APP_PATHS = {
-        # Microsoft Office
-        "word": [
-            "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
-            "C:\\Program Files (x86)\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
-            "C:\\Program Files\\Microsoft Office\\Office16\\WINWORD.EXE",
-            "winword.exe"
-        ],
-        "excel": [
-            "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
-            "C:\\Program Files (x86)\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
-            "C:\\Program Files\\Microsoft Office\\Office16\\EXCEL.EXE",
-            "excel.exe"
-        ],
-        "powerpoint": [
-            "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
-            "C:\\Program Files (x86)\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
-            "C:\\Program Files\\Microsoft Office\\Office16\\POWERPNT.EXE",
-            "powerpnt.exe"
-        ],
-        "outlook": [
-            "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
-            "C:\\Program Files (x86)\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
-            "outlook.exe"
-        ],
-        
-        # Development
-        "vs code": ["code", "C:\\Program Files\\Microsoft VS Code\\Code.exe"],
-        "vscode": ["code", "C:\\Program Files\\Microsoft VS Code\\Code.exe"],
-        "notepad": ["notepad.exe"],
-        "notepad++": ["C:\\Program Files\\Notepad++\\notepad++.exe", "C:\\Program Files (x86)\\Notepad++\\notepad++.exe", "notepad++.exe"],
-        
-        # Browsers
-        "chrome": [
-            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-            "chrome.exe"
-        ],
-        "firefox": [
-            "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
-            "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe",
-            "firefox.exe"
-        ],
-        "edge": [
-            "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-            "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-            "msedge.exe"
-        ],
-        
-        # Productivity
-        "calculator": ["calc.exe"],
-        "calculator app": ["calc.exe"],
-        "paint": ["mspaint.exe"],
-        "task manager": ["taskmgr.exe"],
-        
-        # Media
-        "spotify": [
-            "C:\\Users\\%USERNAME%\\AppData\\Roaming\\Spotify\\Spotify.exe",
-            "spotify.exe"
-        ],
-        "vlc": [
-            "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
-            "C:\\Program Files (x86)\\VideoLAN\\VLC\\vlc.exe",
-            "vlc.exe"
-        ],
-        
-        # Communication
-        "zoom": ["zoom.exe", "C:\\Program Files\\Zoom\\Zoom.exe"],
-        "teams": ["C:\\Program Files\\Microsoft\\Teams\\Teams.exe", "teams.exe"],
-        "discord": ["discord.exe"],
-        
-        # Settings
-        "settings": ["ms-settings:"],
-        "control panel": ["control.exe"],
-        
-        # Other
-        "file explorer": ["explorer.exe"],
-        "terminal": ["cmd.exe"],
-        "powershell": ["powershell.exe"],
-    }
-    
-    # Process names for verification
-    PROCESS_NAMES = {
-        "chrome": "chrome.exe",
-        "firefox": "firefox.exe",
-        "edge": "msedge.exe",
-        "word": "WINWORD.EXE",
-        "excel": "EXCEL.EXE",
-        "powerpoint": "POWERPNT.EXE",
-        "outlook": "OUTLOOK.EXE",
-        "vs code": "Code.exe",
-        "vscode": "Code.exe",
-        "spotify": "Spotify.exe",
-        "notepad": "notepad.exe",
-        "notepad++": "notepad++.exe",
-        "calculator": "Calculator.exe",
-        "paint": "mspaint.exe",
-        "teams": "Teams.exe",
-        "discord": "Discord.exe",
-        "zoom": "Zoom.exe",
-        "vlc": "vlc.exe",
-        "terminal": "cmd.exe",
-        "powershell": "powershell.exe",
-    }
-    
-    @staticmethod
-    def _is_process_running(process_name):
-        """✅ Verify if a process is running"""
-        try:
-            for proc in psutil.process_iter(['pid', 'name']):
-                if proc.info['name'].lower() == process_name.lower():
-                    return True
-            return False
-        except Exception as e:
-            logger.error(f"Error checking process: {e}")
-            return False
-    
-    @staticmethod
-    def _find_executable(app_name):
-        """🔍 Find actual executable path"""
-        app_name_lower = app_name.lower().strip()
-        
-        # Get possible paths
-        paths = AppLauncher.APP_PATHS.get(app_name_lower, [app_name_lower])
-        
-        if isinstance(paths, str):
-            paths = [paths]
-        
-        # Try each path
-        for path in paths:
-            expanded_path = os.path.expandvars(path)
-            
-            # Check if it's a Windows settings URI
-            if expanded_path.startswith("ms-"):
-                return expanded_path, "uri"
-            
-            # Check if file exists
-            if os.path.exists(expanded_path) and os.path.isfile(expanded_path):
-                return expanded_path, "file"
-            
-            # For shell commands without extension
-            if not expanded_path.endswith(".exe") and not expanded_path.endswith(".EXE"):
-                # Try to find it in PATH
-                try:
-                    result = subprocess.run(
-                        f"where {expanded_path}",
-                        shell=True,
-                        capture_output=True,
-                        text=True,
-                        timeout=2
-                    )
-                    if result.returncode == 0:
-                        found_path = result.stdout.strip().split('\n')[0]
-                        if found_path and os.path.exists(found_path):
-                            return found_path, "file"
-                except:
-                    pass
-        
-        return None, None
-    
-    @staticmethod
-    def open_app(app_name, wait_time=3):
-        """✅ Open application with REAL verification"""
-        try:
-            logger.info(f"🚀 Attempting to open: {app_name}")
-            app_name_lower = app_name.lower().strip()
-            
-            # Find the executable
-            executable, exec_type = AppLauncher._find_executable(app_name)
-            
-            if not executable:
-                error_msg = f"❌ Could not find executable for app: {app_name}"
-                logger.error(error_msg)
-                return {"success": False, "error": error_msg}
-            
-            logger.info(f"📍 Found executable: {executable}")
-            
-            # Get process name for verification
-            process_name = AppLauncher.PROCESS_NAMES.get(app_name_lower)
-            
-            # Try to open the app
+
+    def __init__(self):
+
+        logger.info("🚀 Initializing Dynamic App Launcher")
+
+        self.registry = self.build_dynamic_registry()
+
+    # =====================================================
+    # BUILD REGISTRY DYNAMICALLY
+    # =====================================================
+
+    def build_dynamic_registry(self):
+
+        registry = {}
+
+        logger.info("🔍 Building dynamic executable registry...")
+
+        # PATH executables
+        common_commands = [
+
+            "chrome",
+            "msedge",
+            "firefox",
+            "code",
+            "python",
+            "node",
+            "git",
+            "cmd",
+            "powershell",
+            "notepad",
+            "spotify"
+        ]
+
+        for cmd in common_commands:
+
+            exe = shutil.which(cmd)
+
+            if exe:
+
+                name = (
+                    os.path.basename(exe)
+                    .replace(".exe", "")
+                    .lower()
+                )
+
+                registry[name] = exe
+
+        # SEARCH WINDOWS PROGRAM FILES
+        search_roots = [
+
+            os.environ.get("ProgramFiles"),
+
+            os.environ.get("ProgramFiles(x86)"),
+
+            os.environ.get("LOCALAPPDATA")
+        ]
+
+        for root in search_roots:
+
+            if not root:
+                continue
+
+            if not os.path.exists(root):
+                continue
+
+            logger.info(f"📂 Scanning: {root}")
+
             try:
-                if exec_type == "uri":
-                    # Windows settings URI
-                    logger.info(f"🔗 Opening URI: {executable}")
-                    subprocess.Popen(f"start {executable}", shell=True)
-                else:
-                    # File executable
-                    logger.info(f"▶️  Launching: {executable}")
-                    proc = subprocess.Popen(executable, shell=False)
-                    
-                    # Verify process started with valid PID
-                    if proc.pid is None:
-                        error_msg = f"❌ Failed to get process ID for {app_name}"
-                        logger.error(error_msg)
-                        return {"success": False, "error": error_msg}
-                    
-                    logger.info(f"✅ Process started with PID: {proc.pid}")
-                
-                # Wait for app to start
-                logger.info(f"⏳ Waiting {wait_time}s for {app_name} to load...")
-                time.sleep(wait_time)
-                
-                # Verify process is running
-                if process_name:
-                    if AppLauncher._is_process_running(process_name):
-                        logger.info(f"✅ Process verified: {process_name} is running")
-                        return {
-                            "success": True,
-                            "message": f"✅ Successfully opened {app_name}",
-                            "process": process_name,
-                            "executable": executable
-                        }
-                    else:
-                        # Give it more time
-                        logger.warning(f"⚠️  Process not detected yet, waiting 2 more seconds...")
-                        time.sleep(2)
-                        
-                        if AppLauncher._is_process_running(process_name):
-                            logger.info(f"✅ Process verified: {process_name} is running")
-                            return {
-                                "success": True,
-                                "message": f"✅ Successfully opened {app_name}",
-                                "process": process_name,
-                                "executable": executable
-                            }
-                        else:
-                            error_msg = f"❌ Process {process_name} not found after {wait_time + 2}s"
-                            logger.error(error_msg)
-                            return {"success": False, "error": error_msg}
-                
-                # If no process name, assume success after wait
-                logger.info(f"✅ App opened: {app_name}")
-                return {
-                    "success": True,
-                    "message": f"✅ Successfully opened {app_name}",
-                    "executable": executable
-                }
-                
+
+                for current_root, dirs, files in os.walk(root):
+
+                    for file in files:
+
+                        if file.lower().endswith(".exe"):
+
+                            exe_name = (
+                                file
+                                .replace(".exe", "")
+                                .lower()
+                            )
+
+                            full_path = os.path.join(
+                                current_root,
+                                file
+                            )
+
+                            if exe_name not in registry:
+
+                                registry[exe_name] = full_path
+
             except Exception as e:
-                error_msg = f"❌ Failed to execute {executable}: {str(e)}"
-                logger.error(error_msg)
-                return {"success": False, "error": error_msg}
-        
-        except Exception as e:
-            error_msg = f"❌ Error opening app {app_name}: {str(e)}"
-            logger.error(error_msg)
-            return {"success": False, "error": error_msg}
-    
-    @staticmethod
-    def close_app(app_name):
-        """✅ Close an application with verification"""
+
+                logger.warning(str(e))
+
+        logger.info(
+            f"✅ Registry loaded with {len(registry)} executables"
+        )
+
+        return registry
+
+    # =====================================================
+    # FIND APP
+    # =====================================================
+
+    def find_app(self, app_name):
+
+        app_name = (
+            app_name
+            .lower()
+            .strip()
+        )
+
+        # EXACT MATCH
+        if app_name in self.registry:
+
+            return self.registry[app_name]
+
+        # PARTIAL MATCH
+        for key, value in self.registry.items():
+
+            if app_name in key:
+
+                return value
+
+        # FUZZY WORD MATCH
+        words = app_name.split()
+
+        for key, value in self.registry.items():
+
+            score = 0
+
+            for word in words:
+
+                if word in key:
+
+                    score += 1
+
+            if score > 0:
+
+                return value
+
+        return None
+
+    # =====================================================
+    # VERIFY PROCESS
+    # =====================================================
+
+    def verify_process(self, exe_path):
+
         try:
-            logger.info(f"🛑 Attempting to close: {app_name}")
-            app_name_lower = app_name.lower().strip()
-            
-            # Get process name
-            process_name = AppLauncher.PROCESS_NAMES.get(app_name_lower, f"{app_name}.exe")
-            
-            logger.info(f"🎯 Targeting process: {process_name}")
-            
-            # Try to terminate the process
-            result = subprocess.run(
-                f'taskkill /IM "{process_name}" /F',
-                shell=True,
-                capture_output=True,
-                text=True
-            )
-            
-            # Check if process was killed
-            if result.returncode == 0:
-                logger.info(f"✅ Successfully terminated: {process_name}")
-                time.sleep(1)  # Wait for process to fully close
-                
-                # Verify process is closed
-                if not AppLauncher._is_process_running(process_name):
-                    logger.info(f"✅ Verified: {process_name} is closed")
-                    return {"success": True, "message": f"✅ Closed {app_name}"}
-                else:
-                    logger.warning(f"⚠️  Process still running: {process_name}")
-                    return {"success": False, "error": f"Process still running after termination"}
-            else:
-                error_msg = f"Process not found or already closed: {process_name}"
-                logger.info(f"ℹ️  {error_msg}")
-                return {"success": True, "message": error_msg}
-        except Exception as e:
-            error_msg = f"❌ Error closing {app_name}: {str(e)}"
-            logger.error(error_msg)
-            return {"success": False, "error": error_msg}
-    
-    @staticmethod
-    def list_running_apps():
-        """✅ List all running applications"""
-        try:
-            logger.info("📋 Listing running applications...")
-            running_apps = []
-            
-            for proc in psutil.process_iter(['pid', 'name']):
+
+            exe_name = os.path.basename(
+                exe_path
+            ).lower()
+
+            for proc in psutil.process_iter(
+
+                ['name']
+
+            ):
+
                 try:
-                    if proc.info['name'].endswith('.exe'):
-                        running_apps.append(proc.info['name'])
+
+                    if proc.info['name']:
+
+                        if proc.info['name'].lower() == exe_name:
+
+                            logger.info(
+                                f"✅ Verified process: {exe_name}"
+                            )
+
+                            return True
+
                 except:
                     pass
-            
-            unique_apps = list(set(running_apps))
-            logger.info(f"✅ Found {len(unique_apps)} running applications")
-            
-            return {"success": True, "apps": unique_apps, "count": len(unique_apps)}
+
         except Exception as e:
-            error_msg = f"❌ Error listing apps: {str(e)}"
-            logger.error(error_msg)
-            return {"success": False, "error": error_msg}
-    
-    @staticmethod
-    def focus_window(window_name):
-        """✅ Focus a specific window"""
+
+            logger.error(str(e))
+
+        return False
+
+    # =====================================================
+    # OPEN APPLICATION
+    # =====================================================
+
+    def open_app(
+        self,
+        app_name,
+        wait_time=3
+    ):
+
         try:
-            import pygetwindow as gw
-            
-            logger.info(f"🎯 Focusing window: {window_name}")
-            
-            windows = gw.getWindowsWithTitle(window_name)
-            
-            if windows:
-                windows[0].activate()
-                time.sleep(0.5)
-                logger.info(f"✅ Focused window: {window_name}")
-                return {"success": True, "message": f"Focused window: {window_name}"}
-            else:
-                error_msg = f"❌ Window not found: {window_name}"
-                logger.error(error_msg)
-                return {"success": False, "error": error_msg}
-        except ImportError:
-            logger.warning("⚠️  pygetwindow not available, skipping window focus")
-            return {"success": False, "error": "pygetwindow not installed"}
+
+            logger.info(
+                f"🚀 Opening app: {app_name}"
+            )
+
+            app_path = self.find_app(app_name)
+
+            if not app_path:
+
+                return {
+
+                    "success": False,
+
+                    "error": f"Application not found: {app_name}"
+                }
+
+            logger.info(
+                f"📍 Resolved path: {app_path}"
+            )
+
+            proc = subprocess.Popen(
+
+                app_path,
+
+                shell=False
+            )
+
+            logger.info(
+                f"🆔 PID: {proc.pid}"
+            )
+
+            time.sleep(wait_time)
+
+            verified = self.verify_process(
+                app_path
+            )
+
+            if not verified:
+
+                return {
+
+                    "success": False,
+
+                    "error": f"Failed to verify launch: {app_name}",
+
+                    "path": app_path
+                }
+
+            return {
+
+                "success": True,
+
+                "message": f"Opened {app_name}",
+
+                "path": app_path,
+
+                "pid": proc.pid,
+
+                "verified": True
+            }
+
         except Exception as e:
-            error_msg = f"❌ Error focusing window: {str(e)}"
-            logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+
+            logger.error(str(e))
+
+            return {
+
+                "success": False,
+
+                "error": str(e),
+
+                "app": app_name
+            }
+
+    # =====================================================
+    # CLOSE APPLICATION
+    # =====================================================
+
+    def close_app(self, app_name):
+
+        try:
+
+            app_path = self.find_app(app_name)
+
+            if not app_path:
+
+                return {
+
+                    "success": False,
+
+                    "error": "Application not found"
+                }
+
+            exe_name = os.path.basename(
+                app_path
+            )
+
+            subprocess.run(
+
+                f'taskkill /f /im "{exe_name}"',
+
+                shell=True,
+
+                capture_output=True
+            )
+
+            time.sleep(1)
+
+            if self.verify_process(app_path):
+
+                return {
+
+                    "success": False,
+
+                    "error": f"Failed to close {app_name}"
+                }
+
+            return {
+
+                "success": True,
+
+                "message": f"Closed {app_name}"
+            }
+
+        except Exception as e:
+
+            return {
+
+                "success": False,
+
+                "error": str(e)
+            }
+
+    # =====================================================
+    # FOCUS WINDOW
+    # =====================================================
+
+    def focus_window(self, title):
+
+        try:
+
+            if gw is None:
+
+                return {
+
+                    "success": False,
+
+                    "error": "pygetwindow not installed"
+                }
+
+            windows = gw.getWindowsWithTitle(title)
+
+            if not windows:
+
+                return {
+
+                    "success": False,
+
+                    "error": f"No window found: {title}"
+                }
+
+            win = windows[0]
+
+            win.activate()
+
+            time.sleep(1)
+
+            return {
+
+                "success": True,
+
+                "message": f"Focused window: {title}"
+            }
+
+        except Exception as e:
+
+            return {
+
+                "success": False,
+
+                "error": str(e)
+            }
+
+    # =====================================================
+    # TYPE TEXT
+    # =====================================================
+
+    def type_text(
+        self,
+        text,
+        interval=0.03
+    ):
+
+        try:
+
+            pyautogui.write(
+
+                text,
+
+                interval=interval
+            )
+
+            return {
+
+                "success": True,
+
+                "typed": text
+            }
+
+        except Exception as e:
+
+            return {
+
+                "success": False,
+
+                "error": str(e)
+            }
+
+    # =====================================================
+    # PRESS KEY
+    # =====================================================
+
+    def press_key(self, key):
+
+        try:
+
+            pyautogui.press(key)
+
+            return {
+
+                "success": True,
+
+                "key": key
+            }
+
+        except Exception as e:
+
+            return {
+
+                "success": False,
+
+                "error": str(e)
+            }
+
+    # =====================================================
+    # HOTKEY
+    # =====================================================
+
+    def hotkey(self, *keys):
+
+        try:
+
+            pyautogui.hotkey(*keys)
+
+            return {
+
+                "success": True,
+
+                "keys": keys
+            }
+
+        except Exception as e:
+
+            return {
+
+                "success": False,
+
+                "error": str(e)
+            }
+
+    # =====================================================
+    # SCREENSHOT
+    # =====================================================
+
+    def take_screenshot(self):
+
+        try:
+
+            desktop = os.path.join(
+
+                os.path.expanduser("~"),
+
+                "Desktop"
+            )
+
+            filename = os.path.join(
+
+                desktop,
+
+                f"screenshot_{int(time.time())}.png"
+            )
+
+            image = pyautogui.screenshot()
+
+            image.save(filename)
+
+            return {
+
+                "success": True,
+
+                "file": filename
+            }
+
+        except Exception as e:
+
+            return {
+
+                "success": False,
+
+                "error": str(e)
+            }
+
+    # =====================================================
+    # LIST APPS
+    # =====================================================
+
+    def list_apps(self):
+
+        return {
+
+            "success": True,
+
+            "count": len(self.registry),
+
+            "apps": sorted(
+                list(
+                    self.registry.keys()
+                )
+            )
+        }
 
 
-app_launcher = AppLauncher()
+# =====================================================
+# GLOBAL INSTANCE
+# =====================================================
 
-
-# Export
 app_launcher = AppLauncher()
